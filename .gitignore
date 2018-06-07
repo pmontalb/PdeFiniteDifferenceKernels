@@ -1,0 +1,7 @@
+*.pdb
+Debug
+*.suo
+*.db
+/.vs/CudaLightKernels/v15/*.opendb
+Release
+*.ipch
