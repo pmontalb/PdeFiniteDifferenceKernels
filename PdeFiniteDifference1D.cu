@@ -1,4 +1,4 @@
-#include <PdeFiniteDifference1D.cuh>
+#include "PdeFiniteDifference1D.cuh"
 
 #include <CuBlasWrappers.cuh>
 #include <BufferInitializer.cuh>
@@ -43,18 +43,21 @@ namespace detail
 		return cudaGetLastError();
 	}
 
+	/**
+	*	Sets the boundary conditions in the solution. It's a bit of a waste calling a kernel<<<1, 1>>>, but I found no other good way!
+	*/
 	int _SetBoundaryConditions1D(MemoryTile solution, const FiniteDifferenceInput1D input)
 	{
-		if (input.boundaryConditions.type == BoundaryConditionType::Periodic)
+		if (input.boundaryConditions.left.type == BoundaryConditionType::Periodic && input.boundaryConditions.right.type == BoundaryConditionType::Periodic)
 			return 0;  // no need to call the kernel!
 
 		switch (solution.mathDomain)
 		{
 			case MathDomain::Float:
-				CUDA_CALL_SINGLE(__SetBoundaryConditions1D__<float>, (float*)solution.pointer, (float)input.boundaryConditions.left, (float)input.boundaryConditions.right, input.boundaryConditions.type, (float*)input.grid.pointer, solution.nRows);
+				CUDA_CALL_XY(__SetBoundaryConditions1D__<float>, 1, 1, (float*)solution.pointer, (float)input.boundaryConditions.left.value, (float)input.boundaryConditions.right.value, input.boundaryConditions.left.type, input.boundaryConditions.right.type, (float*)input.grid.pointer, solution.nRows);
 				break;
 			case MathDomain::Double:
-				CUDA_CALL_DOUBLE(__SetBoundaryConditions1D__<double>, (double*)solution.pointer, input.boundaryConditions.left, input.boundaryConditions.right, input.boundaryConditions.type, (double*)input.grid.pointer, solution.nRows);
+				CUDA_CALL_XY(__SetBoundaryConditions1D__<double>, 1, 1, (double*)solution.pointer, input.boundaryConditions.left.value, input.boundaryConditions.right.value, input.boundaryConditions.left.type, input.boundaryConditions.right.type, (double*)input.grid.pointer, solution.nRows);
 				break;
 			default:
 				return CudaKernelException::_NotImplementedException;
@@ -70,10 +73,10 @@ EXTERN_C
 		switch (spaceDiscretizer.mathDomain)
 		{
 			case MathDomain::Float:
-				CUDA_CALL_SINGLE(__MakeSpaceDiscretizer1D__<float>, (float*)spaceDiscretizer.pointer, (float*)input.grid.pointer, (float*)input.velocity.pointer, (float*)input.diffusion.pointer, input.boundaryConditions.type, input.grid.size);
+				CUDA_CALL_SINGLE(__MakeSpaceDiscretizer1D__<float>, (float*)spaceDiscretizer.pointer, (float*)input.grid.pointer, (float*)input.velocity.pointer, (float*)input.diffusion.pointer, input.boundaryConditions.left.type, input.boundaryConditions.right.type, input.grid.size);
 				break;
 			case MathDomain::Double:
-				CUDA_CALL_DOUBLE(__MakeSpaceDiscretizer1D__<double>, (double*)spaceDiscretizer.pointer, (double*)input.grid.pointer, (double*)input.velocity.pointer, (double*)input.diffusion.pointer, input.boundaryConditions.type, input.grid.size);
+				CUDA_CALL_DOUBLE(__MakeSpaceDiscretizer1D__<double>, (double*)spaceDiscretizer.pointer, (double*)input.grid.pointer, (double*)input.velocity.pointer, (double*)input.diffusion.pointer, input.boundaryConditions.left.type, input.boundaryConditions.right.type, input.grid.size);
 				break;
 			default:
 				return CudaKernelException::_NotImplementedException;
@@ -165,7 +168,7 @@ EXTERN_C
 }
 
 template <typename T>
-GLOBAL void __MakeSpaceDiscretizer1D__(T* RESTRICT spaceDiscretizer, const T* RESTRICT grid, const T* RESTRICT velocity, const T* RESTRICT diffusion, const BoundaryConditionType boundaryConditionType, const unsigned sz)
+GLOBAL void __MakeSpaceDiscretizer1D__(T* RESTRICT spaceDiscretizer, const T* RESTRICT grid, const T* RESTRICT velocity, const T* RESTRICT diffusion, const BoundaryConditionType leftBoundaryConditionType, const BoundaryConditionType rightBoundaryConditionType, const unsigned sz)
 {
 	CUDA_FUNCTION_PROLOGUE;
 
@@ -175,26 +178,33 @@ GLOBAL void __MakeSpaceDiscretizer1D__(T* RESTRICT spaceDiscretizer, const T* RE
 		// (consider that identity is added later on!)
 
 		// Dirichlet: nothing to do
-		if (boundaryConditionType == BoundaryConditionType::Neumann)
-		{
-			// Neumann: -2 1 ...  0 0
-			//			 0 0 ...  0 0
-			//			 0 0 ... -1 0
 
+		// Neumann: -2 1 ...  0 0
+		//			 0 0 ...  0 0
+		//			 0 0 ... -1 0
+
+		// Periodic: -1 0 ... 1  0
+		//			  0 0 ... 0  0
+		//			  0 1 ... 0 -1
+
+		if (leftBoundaryConditionType == BoundaryConditionType::Neumann)
+		{
 			spaceDiscretizer[0] = static_cast<T>(-2.0);
 			spaceDiscretizer[sz] = static_cast<T>(1.0);
+		}
+		else if (leftBoundaryConditionType == BoundaryConditionType::Periodic)
+		{
+			spaceDiscretizer[0] = static_cast<T>(-1.0);
+			spaceDiscretizer[0 + sz * (sz - 2)] = static_cast<T>(1.0);
+		}
 
+		if (rightBoundaryConditionType == BoundaryConditionType::Neumann)
+		{
 			//spaceDiscretizer[sz - 1 + sz * (sz - 2)] = static_cast<T>(0.0);
 			spaceDiscretizer[sz - 1 + sz * (sz - 1)] = static_cast<T>(-1.0);
 		}
-		else if (boundaryConditionType == BoundaryConditionType::Periodic)
+		else if (rightBoundaryConditionType == BoundaryConditionType::Periodic)
 		{
-			// Periodic: -1 0 ... 1  0
-			//			  0 0 ... 0  0
-			//			  0 1 ... 0 -1
-			spaceDiscretizer[0] = static_cast<T>(-1.0);
-			spaceDiscretizer[0 + sz * (sz - 2)] = static_cast<T>(1.0);
-
 			spaceDiscretizer[sz - 1 + sz * (sz - 2)] = static_cast<T>(0.0);
 			spaceDiscretizer[sz - 1 + sz * 2] = static_cast<T>(1.0);
 		}
@@ -214,24 +224,34 @@ GLOBAL void __MakeSpaceDiscretizer1D__(T* RESTRICT spaceDiscretizer, const T* RE
 }
 
 template <typename T>
-GLOBAL void __SetBoundaryConditions1D__(T* RESTRICT solution, const T leftValue, const T rightValue, const BoundaryConditionType boundaryConditionType, const T* RESTRICT grid, const unsigned sz)
+GLOBAL void __SetBoundaryConditions1D__(T* RESTRICT solution, const T leftValue, const T rightValue, const BoundaryConditionType leftBoundaryConditionType, const BoundaryConditionType rightBoundaryConditionType, const T* RESTRICT grid, const unsigned sz)
 {
 	CUDA_FUNCTION_PROLOGUE;
 
 	// update boundary condition only for the most recent solution, which is the first column of the solution matrix
 	if (tid == 0)
 	{
-		switch (boundaryConditionType)
+		switch (leftBoundaryConditionType)
 		{
 			case BoundaryConditionType::Dirichlet:
 				solution[0] = leftValue;
-				solution[sz - 1] = rightValue;
 			case BoundaryConditionType::Neumann:
 				solution[0] = leftValue * (grid[1] - grid[0]);
-				solution[sz - 1] = rightValue * (grid[sz - 1] - grid[sz - 2]);
 			case BoundaryConditionType::Periodic:
 				// this is already done with the matrix multiplication!
 				//solution[0] = solution[0];
+			default:
+				break;
+		}
+
+		switch (leftBoundaryConditionType)
+		{
+			case BoundaryConditionType::Dirichlet:
+				solution[sz - 1] = rightValue;
+			case BoundaryConditionType::Neumann:
+				solution[sz - 1] = rightValue * (grid[sz - 1] - grid[sz - 2]);
+			case BoundaryConditionType::Periodic:
+				// this is already done with the matrix multiplication!
 				//solution[sz - 1] = rightValue * (grid[sz - 1] - grid[sz - 2]);
 			default:
 				break;

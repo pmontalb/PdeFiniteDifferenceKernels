@@ -1,5 +1,6 @@
 
 #include <Flags.cuh>
+#include <Types.h>
 
 EXTERN_C
 {
@@ -19,15 +20,31 @@ EXTERN_C
 		Periodic = 3,
 	};
 
+	struct BoundaryCondition
+	{
+		BoundaryConditionType type = BoundaryConditionType::Neumann;
+		double value = 0.0;
+
+		BoundaryCondition(const BoundaryConditionType type = BoundaryConditionType::Neumann, const double value = 0.0)
+			: type(type), value(value)
+		{
+		}
+
+		virtual ~BoundaryCondition() noexcept = default;
+		BoundaryCondition(const BoundaryCondition& rhs) noexcept = default;
+		BoundaryCondition(BoundaryCondition&& rhs) noexcept = default;
+		BoundaryCondition& operator=(const BoundaryCondition& rhs) noexcept = default;
+		BoundaryCondition& operator=(BoundaryCondition&& rhs) noexcept = default;
+	};
+
 	class BoundaryCondition1D
 	{
 	public:
-		BoundaryConditionType type = BoundaryConditionType::Neumann;
-		double left = 0.0;
-		double right = 0.0;
+		BoundaryCondition left = BoundaryCondition();
+		BoundaryCondition right = BoundaryCondition();
 
-		BoundaryCondition1D(const BoundaryConditionType type, const double left, const double right)
-			: type(type), left(left), right(right)
+		BoundaryCondition1D(BoundaryCondition left = BoundaryCondition(), BoundaryCondition right = BoundaryCondition())
+			: left(left), right(right)
 		{
 		}
 
@@ -38,12 +55,30 @@ EXTERN_C
 		BoundaryCondition1D& operator=(BoundaryCondition1D&& rhs) noexcept = default;
 	};
 
+	class BoundaryCondition2D : public BoundaryCondition1D
+	{
+	public:
+		BoundaryCondition down = BoundaryCondition();
+		BoundaryCondition up = BoundaryCondition();
+
+		BoundaryCondition2D(BoundaryCondition left = BoundaryCondition(), BoundaryCondition right = BoundaryCondition(), BoundaryCondition down = BoundaryCondition(), BoundaryCondition up = BoundaryCondition())
+			: BoundaryCondition1D(left, right), down(down), up(up)
+		{
+		}
+
+		virtual ~BoundaryCondition2D() noexcept = default;
+		BoundaryCondition2D(const BoundaryCondition2D& rhs) noexcept = default;
+		BoundaryCondition2D(BoundaryCondition2D&& rhs) noexcept = default;
+		BoundaryCondition2D& operator=(const BoundaryCondition2D& rhs) noexcept = default;
+		BoundaryCondition2D& operator=(BoundaryCondition2D&& rhs) noexcept = default;
+	};
+
 	struct FiniteDifferenceInput1D
 	{
 		/**
 		* Time discretization mesh size
 		*/
-		double dt = 0.0;
+		double dt;
 
 		/**
 		* Space discretization mesh
