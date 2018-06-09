@@ -11,7 +11,7 @@ namespace detail
 	*	N.B.: solution is a memory tile, as some solver might require the solution history
 	*	N.B.2: if provided, workBuffer is a previously allocated buffer used for matrix-vector multiplication
 	*/
-	int _Advance(MemoryTile solution, const MemoryCube timeDiscretizer, MemoryTile workBuffer, const bool overwriteBuffer)
+	int _Advance1D(MemoryTile solution, const MemoryCube timeDiscretizer, MemoryTile workBuffer, const bool overwriteBuffer)
 	{
 		// this is to support multi-step algorithms: each solution is multiplied by a different time discretizer
 		MemoryBuffer _solution(solution.pointer, solution.nRows, solution.memorySpace, solution.mathDomain);
@@ -35,7 +35,7 @@ namespace detail
 		for (unsigned i = 0; i < solution.nCols; ++i)
 		{
 			_buffer.pointer = workBuffer.pointer + i * _buffer.TotalSize();
-			_solution.pointer = solution.pointer + i * _buffer.TotalSize();
+			_solution.pointer = solution.pointer + i * _solution.TotalSize();
 			_timeDiscretizer.pointer = timeDiscretizer.pointer + i * _timeDiscretizer.TotalSize();
 			_Dot(*_out, _timeDiscretizer, *_in);
 		}
@@ -144,7 +144,7 @@ EXTERN_C
 		int err = 0;
 		for (unsigned n = 0; n < nSteps; ++n)
 		{
-			err = detail::_Advance(solution, timeDiscretizer, workBuffer, overwriteBuffer);
+			err = detail::_Advance1D(solution, timeDiscretizer, workBuffer, overwriteBuffer);
 			if (err)
 				return err;
 				

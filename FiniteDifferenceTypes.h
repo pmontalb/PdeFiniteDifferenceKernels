@@ -1,3 +1,4 @@
+#pragma once
 
 #include <Flags.cuh>
 #include <Types.h>
@@ -7,10 +8,32 @@ EXTERN_C
 	enum class SolverType
 	{
 		Null = 0,
+
+		/**
+		* Single-Step
+		*/
 		ExplicitEuler = 1,
 		ImplicitEuler = 2,
 		CrankNicolson = 3,
+
+		/**
+		* Multi-Step
+		*/
+	    AdamsBashforth2 = 4,
+		AdamsMouldon2 = 5,
 	};
+
+	static constexpr unsigned getNumberOfSteps(const SolverType solverType)
+	{
+		switch (solverType)
+		{
+			case SolverType::AdamsBashforth2:
+			case SolverType::AdamsMouldon2:
+				return 2;
+			default:
+				return 1;
+		}
+	}
 
 	enum class BoundaryConditionType
 	{
