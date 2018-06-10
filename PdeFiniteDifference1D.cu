@@ -30,6 +30,8 @@ namespace detail
 			_in = &_buffer;
 			_out = &_solution;
 		}
+		const ptr_t inPtr = _in->pointer;
+		const ptr_t outPtr = _out->pointer;
 
 		// multiplicate each solution with the respective time discretizer
 		for (unsigned i = 0; i < solution.nCols; ++i)
@@ -39,22 +41,25 @@ namespace detail
 			_timeDiscretizer.pointer = timeDiscretizer.pointer + i * _timeDiscretizer.TotalSize();
 			_Dot(*_out, _timeDiscretizer, *_in);
 		}
+		int err = cudaGetLastError();
 
 		// add the partial results into the latest solution
-		const ptr_t& outPtr = overwriteBuffer ? workBuffer.pointer : solution.pointer;
+		
 		for (unsigned i = 1; i < solution.nCols; ++i)
 		{
-			// copy the input solution into the older solution buffers
-			_out->pointer = outPtr + i * _buffer.TotalSize();
-			_DeviceToDeviceCopy(*_out, *_in);
-
-			// re-use _in for convenience
+			// cumulative sum of each step contribution into the first column
 			_out->pointer = outPtr;
-			_in->pointer = _out->pointer + i * _solution.TotalSize();
+			_in->pointer = outPtr + i * _in->TotalSize();  // re-use _in for convenience!
 			_AddEqual(*_out, *_in);
+			err = cudaGetLastError();
+
+			// copy the input solution into the older solution buffers
+			_out->pointer = _in->pointer;
+			_in->pointer = inPtr + i * _in->TotalSize();
+			_DeviceToDeviceCopy(*_out, *_in);
+			err = cudaGetLastError();
 		}
 		
-
 		return cudaGetLastError();
 	}
 
@@ -149,7 +154,7 @@ EXTERN_C
 				assert(timeDiscretizer.nCubes == 2);
 				
 				_Eye(_timeDiscretizer);
-				_AddEqual(_timeDiscretizer, spaceDiscretizer, 1.5 * input.dt);  // A = I - .5 * dt
+				_AddEqual(_timeDiscretizer, spaceDiscretizer, 1.5 * input.dt);  // A = I + 1.5 * dt
 
 				// A_{n} = - L * .5 * dt
 				_timeDiscretizer.pointer += _timeDiscretizer.nRows * _timeDiscretizer.nCols * _timeDiscretizer.ElementarySize();
