@@ -4,6 +4,8 @@
 #include <BufferInitializer.cuh>
 #include <MemoryManager.cuh>
 
+#include <array>
+
 namespace detail
 {
 	/**
@@ -82,6 +84,69 @@ namespace detail
 			default:
 				return CudaKernelException::_NotImplementedException;
 		}
+		return cudaGetLastError();
+	}
+
+	// N is the size of the Butcher tableau table
+	// aMatrix is the lower triangular tableau matrix. If the diagonal is populated the method is an implicit RK
+	// bvector is the vector used for composing the "k"'s 
+	// WARNING: This doesn't support dense aMatrix, but only lower triangular
+	template<unsigned N>
+	int _MakeRungeKuttaDiscretizer(const std::array<double, N * (N + 1) / 2>& aMatrix, 
+								   const std::array<double, N>& bVector, 
+								   const double dt, 
+								   const MemoryTile& spaceDiscretizer, 
+								   const MemoryTile& timeDiscretizer)
+	{
+		auto getLowerTriangularIndex = [](const unsigned i, const unsigned j) { return j + i * (i + 1) / 2; };
+
+		MemoryCube kVector(0, timeDiscretizer.nRows, timeDiscretizer.nCols, N, timeDiscretizer.memorySpace, timeDiscretizer.mathDomain);
+		_Alloc(kVector);
+
+		MemoryTile eye(timeDiscretizer);
+		_Eye(eye);
+
+		// loop for calculating k_i
+		MemoryTile k_i, k_j;
+		MemoryTile kRhs(timeDiscretizer); // kRhs is a working buffer that stores k_i r.h.s.
+		_Alloc(kRhs);
+		
+		for (unsigned i = 0; i < N; ++i)
+		{
+			extractMatrixBufferFromCube(k_i, kVector, i);
+			_Eye(kRhs);
+			// loop that does the aMatrix * k multiplication
+			for (unsigned j = 0; j < i; ++j)
+			{
+				extractMatrixBufferFromCube(k_j, kVector, j);
+				if (aMatrix[getLowerTriangularIndex(i, j)] != 0.0)
+					_AddEqualMatrix(kRhs, k_j, MatrixOperation::None, MatrixOperation::None, aMatrix[getLowerTriangularIndex(i, j)] * dt);
+			}
+			_Multiply(k_i, spaceDiscretizer, kRhs, spaceDiscretizer.nRows, kRhs.nRows);
+
+			if (aMatrix[getLowerTriangularIndex(i, i)] != 0.0)
+			{
+				// re-se kRhs instead of allocating kLhs
+				_Eye(kRhs);
+				_AddEqual(kRhs, spaceDiscretizer, -aMatrix[getLowerTriangularIndex(i, i)] * dt);
+				_Solve(kRhs, k_i);
+			}
+		}
+
+		_Free(kVector);
+		_Free(kRhs);
+
+		return cudaGetLastError();
+	}
+
+
+	int _MakeRungeKuttaGaussLegendre(const std::array<double, 4>& aMatrix,
+									 const std::array<double, 2>& bVector,
+									 const double dt,
+									 const MemoryTile& spaceDiscretizer,
+									 const MemoryTile& timeDiscretizer)
+	{
+		// TODO:
 		return cudaGetLastError();
 	}
 }
@@ -184,6 +249,40 @@ EXTERN_C
 				_Solve(leftOperator, _timeDiscretizer);
 			}
 			break;
+
+			case SolverType::RungeKuttaRalston:
+				detail::_MakeRungeKuttaDiscretizer<2>({ 0, 
+													    2.0 / 3.0, 0 }, 
+														{ .25, .75 }, input.dt, spaceDiscretizer, _timeDiscretizer);
+				break;
+			case SolverType::RungeKutta3:
+				detail::_MakeRungeKuttaDiscretizer<3>({ 0, 
+													    .5, .0, 
+													    -1,  2, 0 }, 
+														{ 1.0 / 6.0, 2.0 / 3.0, 1.0 / 6.0 }, input.dt, spaceDiscretizer, _timeDiscretizer);
+				break;
+			case SolverType::RungeKutta4:
+				detail::_MakeRungeKuttaDiscretizer<4>({ 0, 
+													   .5, .0, 
+													    0, .5, 0,
+				                                        0,  0, 1, 0}, 
+														{ 1.0 / 6.0, 1.0 / 3.0, 1.0 / 3.0, 1.0 / 6.0 }, input.dt, spaceDiscretizer, _timeDiscretizer);
+				break;
+			case SolverType::RungeKuttaThreeEight:
+				detail::_MakeRungeKuttaDiscretizer<4>({ 0,
+													   1.0 / 3.0, .0,
+													  -1.0 / 3.0,  1, 0,
+													           1, -1, 1, 0 },
+													    { 1.0 / 8.0, 3.0 / 8.0, 3.0 / 8.0, 1.0 / 8.0 }, input.dt, spaceDiscretizer, _timeDiscretizer);
+				break;
+			case SolverType::RungeKuttaGaussLegendre4:
+				// FIXME
+				detail::_MakeRungeKuttaDiscretizer<4>({ 0,
+													  1.0 / 3.0, .0,
+													  -1.0 / 3.0,  1, 0,
+													  1, -1, 1, 0 },
+													  { 1.0 / 8.0, 3.0 / 8.0, 3.0 / 8.0, 1.0 / 8.0 }, input.dt, spaceDiscretizer, _timeDiscretizer);
+				break;
 			default:
 				return CudaKernelException::_NotImplementedException;
 		}

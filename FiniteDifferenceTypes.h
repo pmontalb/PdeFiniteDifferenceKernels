@@ -16,11 +16,20 @@ EXTERN_C
 		ImplicitEuler = 2,
 		CrankNicolson = 3,
 
+		/*
+		* Runge-Kutta
+		*/
+		RungeKuttaRalston = 4,         // 2nd order RK
+		RungeKutta3 = 5,               // 3rd order RK
+		RungeKutta4 = 6,               // 4th order RK
+		RungeKuttaThreeEight = 7,      // Not so popular 3/8 method (4th order)
+		RungeKuttaGaussLegendre4 = 8,  // 4th order Gauss-Legendre
+
 		/**
 		* Multi-Step
 		*/
-	    AdamsBashforth2 = 4,
-		AdamsMouldon2 = 5,
+	    AdamsBashforth2 = 9,
+		AdamsMouldon2 = 10,
 
 		__BEGIN__ = 1,
 		__END__ = 6
