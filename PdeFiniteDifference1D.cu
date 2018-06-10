@@ -40,13 +40,28 @@ namespace detail
 			_Dot(*_out, _timeDiscretizer, *_in);
 		}
 
+		// add the partial results into the latest solution
+		const ptr_t& outPtr = overwriteBuffer ? workBuffer.pointer : solution.pointer;
+		for (unsigned i = 1; i < solution.nCols; ++i)
+		{
+			// copy the input solution into the older solution buffers
+			_out->pointer = outPtr + i * _buffer.TotalSize();
+			_DeviceToDeviceCopy(*_out, *_in);
+
+			// re-use _in for convenience
+			_out->pointer = outPtr;
+			_in->pointer = _out->pointer + i * _solution.TotalSize();
+			_AddEqual(*_out, *_in);
+		}
+		
+
 		return cudaGetLastError();
 	}
 
 	/**
 	*	Sets the boundary conditions in the solution. It's a bit of a waste calling a kernel<<<1, 1>>>, but I found no other good way!
 	*/
-	int _SetBoundaryConditions1D(MemoryTile solution, const FiniteDifferenceInput1D input)
+	int _SetBoundaryConditions1D(MemoryTile solution, const MemoryCube timeDiscretizer, const FiniteDifferenceInput1D input)
 	{
 		if (input.boundaryConditions.left.type == BoundaryConditionType::Periodic && input.boundaryConditions.right.type == BoundaryConditionType::Periodic)
 			return 0;  // no need to call the kernel!
@@ -54,10 +69,10 @@ namespace detail
 		switch (solution.mathDomain)
 		{
 			case MathDomain::Float:
-				CUDA_CALL_XY(__SetBoundaryConditions1D__<float>, 1, 1, (float*)solution.pointer, (float)input.boundaryConditions.left.value, (float)input.boundaryConditions.right.value, input.boundaryConditions.left.type, input.boundaryConditions.right.type, (float*)input.grid.pointer, solution.nRows);
+				CUDA_CALL_XY(__SetBoundaryConditions1D__<float>, 1, 1, (float*)solution.pointer, (float*)timeDiscretizer.pointer, (float)input.boundaryConditions.left.value, (float)input.boundaryConditions.right.value, input.boundaryConditions.left.type, input.boundaryConditions.right.type, (float*)input.grid.pointer, solution.nRows);
 				break;
 			case MathDomain::Double:
-				CUDA_CALL_XY(__SetBoundaryConditions1D__<double>, 1, 1, (double*)solution.pointer, input.boundaryConditions.left.value, input.boundaryConditions.right.value, input.boundaryConditions.left.type, input.boundaryConditions.right.type, (double*)input.grid.pointer, solution.nRows);
+				CUDA_CALL_XY(__SetBoundaryConditions1D__<double>, 1, 1, (double*)solution.pointer, (double*)timeDiscretizer.pointer, input.boundaryConditions.left.value, input.boundaryConditions.right.value, input.boundaryConditions.left.type, input.boundaryConditions.right.type, (double*)input.grid.pointer, solution.nRows);
 				break;
 			default:
 				return CudaKernelException::_NotImplementedException;
@@ -73,10 +88,10 @@ EXTERN_C
 		switch (spaceDiscretizer.mathDomain)
 		{
 			case MathDomain::Float:
-				CUDA_CALL_SINGLE(__MakeSpaceDiscretizer1D__<float>, (float*)spaceDiscretizer.pointer, (float*)input.grid.pointer, (float*)input.velocity.pointer, (float*)input.diffusion.pointer, input.boundaryConditions.left.type, input.boundaryConditions.right.type, input.grid.size);
+				CUDA_CALL_SINGLE(__MakeSpaceDiscretizer1D__<float>, (float*)spaceDiscretizer.pointer, (float*)input.grid.pointer, (float*)input.velocity.pointer, (float*)input.diffusion.pointer, input.boundaryConditions.left.type, input.boundaryConditions.right.type, (float)input.dt, input.grid.size);
 				break;
 			case MathDomain::Double:
-				CUDA_CALL_DOUBLE(__MakeSpaceDiscretizer1D__<double>, (double*)spaceDiscretizer.pointer, (double*)input.grid.pointer, (double*)input.velocity.pointer, (double*)input.diffusion.pointer, input.boundaryConditions.left.type, input.boundaryConditions.right.type, input.grid.size);
+				CUDA_CALL_DOUBLE(__MakeSpaceDiscretizer1D__<double>, (double*)spaceDiscretizer.pointer, (double*)input.grid.pointer, (double*)input.velocity.pointer, (double*)input.diffusion.pointer, input.boundaryConditions.left.type, input.boundaryConditions.right.type, input.dt, input.grid.size);
 				break;
 			default:
 				return CudaKernelException::_NotImplementedException;
@@ -86,32 +101,33 @@ EXTERN_C
 
 	EXPORT int _MakeTimeDiscretizer1D(MemoryCube timeDiscretizer, const MemoryTile spaceDiscretizer, const FiniteDifferenceInput1D input)
 	{
+		MemoryTile _timeDiscretizer;
+		extractMatrixBufferFromCube(_timeDiscretizer, timeDiscretizer, 0);
+
 		switch (input.solverType)
 		{
 			case SolverType::ExplicitEuler:
-			{
 				// A = I + L * dt
+				assert(timeDiscretizer.nCubes == 1);
 
-				MemoryTile _timeDiscretizer = static_cast<MemoryTile>(timeDiscretizer);
 				_Eye(_timeDiscretizer);
 				_AddEqual(_timeDiscretizer, spaceDiscretizer, input.dt);
 				break;
-			}
-			case SolverType::ImplicitEuler:
-			{
-				// A = (I - L * dt)^(-1)
 
-				MemoryTile _timeDiscretizer = static_cast<MemoryTile>(timeDiscretizer);
+			case SolverType::ImplicitEuler:
+				// A = (I - L * dt)^(-1)
+				assert(timeDiscretizer.nCubes == 1);
+
 				_Eye(_timeDiscretizer);
 				_AddEqual(_timeDiscretizer, spaceDiscretizer, -input.dt);
 				_Invert(_timeDiscretizer);
 				break;
-			}
+
 			case SolverType::CrankNicolson:
 			{
 				// A = (I - L * .5 * dt)^(-1) * (I + L * .5 * dt)
+				assert(timeDiscretizer.nCubes == 1);
 
-				MemoryTile _timeDiscretizer = static_cast<MemoryTile>(timeDiscretizer);
 				_Eye(_timeDiscretizer);
 
 				// copy timeDiscretizer into leftOperator volatile buffer
@@ -125,6 +141,42 @@ EXTERN_C
 				_Solve(leftOperator, _timeDiscretizer);
 
 				_Free(leftOperator);
+			}
+			break;
+
+			case SolverType::AdamsBashforth2:
+				// A_{n + 1} = (I + L * 1.5 * dt)
+				assert(timeDiscretizer.nCubes == 2);
+				
+				_Eye(_timeDiscretizer);
+				_AddEqual(_timeDiscretizer, spaceDiscretizer, 1.5 * input.dt);  // A = I - .5 * dt
+
+				// A_{n} = - L * .5 * dt
+				_timeDiscretizer.pointer += _timeDiscretizer.nRows * _timeDiscretizer.nCols * _timeDiscretizer.ElementarySize();
+				_DeviceToDeviceCopy(_timeDiscretizer, spaceDiscretizer);
+				_Scale(_timeDiscretizer, -.5 * input.dt);
+				break;
+
+			case SolverType::AdamsMouldon2:
+			{
+				// A_{n + 1} = (I - L * 5 / 12 * dt)^(-1) * (I + L * 2.0 / 3.0 * dt)
+				assert(timeDiscretizer.nCubes == 2);
+
+				// copy timeDiscretizer into leftOperator volatile buffer
+				MemoryTile leftOperator(_timeDiscretizer);
+				_Alloc(leftOperator);
+				_Eye(leftOperator);
+				_AddEqual(leftOperator, spaceDiscretizer, -5.0 / 12.0 * input.dt);  // A = I - .5 * dt
+
+				_Eye(_timeDiscretizer);
+				_AddEqual(_timeDiscretizer, spaceDiscretizer, 2.0 / 3.0 * input.dt);  // A = I - .5 * dt
+				_Solve(leftOperator, _timeDiscretizer);
+
+				// A_{n} = (I - L * 5 / 12 * dt)^(-1) * (- L *  1.0 / 12.0 * dt)
+				_timeDiscretizer.pointer += _timeDiscretizer.nRows * _timeDiscretizer.nCols * _timeDiscretizer.ElementarySize();
+				_DeviceToDeviceCopy(_timeDiscretizer, spaceDiscretizer);
+				_Scale(_timeDiscretizer, -1.0 / 12.0 * input.dt);
+				_Solve(leftOperator, _timeDiscretizer);
 			}
 			break;
 			default:
@@ -147,68 +199,29 @@ EXTERN_C
 			err = detail::_Advance1D(solution, timeDiscretizer, workBuffer, overwriteBuffer);
 			if (err)
 				return err;
-				
+
 			// set boundary conditions
-			err = detail::_SetBoundaryConditions1D(overwriteBuffer ? workBuffer : solution, input);
+			err = detail::_SetBoundaryConditions1D(overwriteBuffer ? workBuffer : solution, timeDiscretizer, input);
 			if (err)
 				return err;
 
 			overwriteBuffer = !overwriteBuffer;
 		}
 
-		if (overwriteBuffer)
-		{
+		if (!overwriteBuffer)  // need the negation here, as it's set at the end of the loop!
 			// copy the result back from working buffer and free it
 			_DeviceToDeviceCopy(solution, workBuffer);
-			_Free(workBuffer);
-		}
+		
+		_Free(workBuffer);
 
 		return cudaGetLastError();
 	}
 }
 
 template <typename T>
-GLOBAL void __MakeSpaceDiscretizer1D__(T* RESTRICT spaceDiscretizer, const T* RESTRICT grid, const T* RESTRICT velocity, const T* RESTRICT diffusion, const BoundaryConditionType leftBoundaryConditionType, const BoundaryConditionType rightBoundaryConditionType, const unsigned sz)
+GLOBAL void __MakeSpaceDiscretizer1D__(T* RESTRICT spaceDiscretizer, const T* RESTRICT grid, const T* RESTRICT velocity, const T* RESTRICT diffusion, const BoundaryConditionType leftBoundaryConditionType, const BoundaryConditionType rightBoundaryConditionType, const T dt, const unsigned sz)
 {
 	CUDA_FUNCTION_PROLOGUE;
-
-	// first thread deals with boundary condition
-	if (tid == 0)
-	{
-		// (consider that identity is added later on!)
-
-		// Dirichlet: nothing to do
-
-		// Neumann: -2 1 ...  0 0
-		//			 0 0 ...  0 0
-		//			 0 0 ... -1 0
-
-		// Periodic: -1 0 ... 1  0
-		//			  0 0 ... 0  0
-		//			  0 1 ... 0 -1
-
-		if (leftBoundaryConditionType == BoundaryConditionType::Neumann)
-		{
-			spaceDiscretizer[0] = static_cast<T>(-2.0);
-			spaceDiscretizer[sz] = static_cast<T>(1.0);
-		}
-		else if (leftBoundaryConditionType == BoundaryConditionType::Periodic)
-		{
-			spaceDiscretizer[0] = static_cast<T>(-1.0);
-			spaceDiscretizer[0 + sz * (sz - 2)] = static_cast<T>(1.0);
-		}
-
-		if (rightBoundaryConditionType == BoundaryConditionType::Neumann)
-		{
-			//spaceDiscretizer[sz - 1 + sz * (sz - 2)] = static_cast<T>(0.0);
-			spaceDiscretizer[sz - 1 + sz * (sz - 1)] = static_cast<T>(-1.0);
-		}
-		else if (rightBoundaryConditionType == BoundaryConditionType::Periodic)
-		{
-			spaceDiscretizer[sz - 1 + sz * (sz - 2)] = static_cast<T>(0.0);
-			spaceDiscretizer[sz - 1 + sz * 2] = static_cast<T>(1.0);
-		}
-	}
 
 	for (unsigned i = tid + 1; i < sz - 1; i += step)
 	{
@@ -224,35 +237,50 @@ GLOBAL void __MakeSpaceDiscretizer1D__(T* RESTRICT spaceDiscretizer, const T* RE
 }
 
 template <typename T>
-GLOBAL void __SetBoundaryConditions1D__(T* RESTRICT solution, const T leftValue, const T rightValue, const BoundaryConditionType leftBoundaryConditionType, const BoundaryConditionType rightBoundaryConditionType, const T* RESTRICT grid, const unsigned sz)
+GLOBAL void __SetBoundaryConditions1D__(T* RESTRICT solution, T* RESTRICT timeDiscretizer, const T leftValue, const T rightValue, const BoundaryConditionType leftBoundaryConditionType, const BoundaryConditionType rightBoundaryConditionType, const T* RESTRICT grid, const unsigned sz)
 {
-	CUDA_FUNCTION_PROLOGUE;
+	unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
 	// update boundary condition only for the most recent solution, which is the first column of the solution matrix
 	if (tid == 0)
 	{
-		switch (leftBoundaryConditionType)
-		{
-			case BoundaryConditionType::Dirichlet:
-				solution[0] = leftValue;
-			case BoundaryConditionType::Neumann:
-				solution[0] = leftValue * (grid[1] - grid[0]);
-			case BoundaryConditionType::Periodic:
-				// this is already done with the matrix multiplication!
-				//solution[0] = solution[0];
-			default:
-				break;
-		}
+		// Dirichlet:  1 0 ...  0 0
+		//			   0 0 ...  0 0
+		//			   0 0 ...  0 1
+
+		// Neumann: -2 1 ...  0 0
+		//			 0 0 ...  0 0
+		//			 0 0 ... -1 0
+
+		// Periodic: -1 0 ... 1  0
+		//			  0 0 ... 0  0
+		//			  0 1 ... 0 -1
 
 		switch (leftBoundaryConditionType)
 		{
 			case BoundaryConditionType::Dirichlet:
-				solution[sz - 1] = rightValue;
+				solution[0] = leftValue;
+				break;
 			case BoundaryConditionType::Neumann:
-				solution[sz - 1] = rightValue * (grid[sz - 1] - grid[sz - 2]);
+				solution[0] = solution[1] - leftValue * (grid[1] - grid[0]);
+				break;
 			case BoundaryConditionType::Periodic:
-				// this is already done with the matrix multiplication!
-				//solution[sz - 1] = rightValue * (grid[sz - 1] - grid[sz - 2]);
+				solution[0] = solution[sz - 2];
+				break;
+			default:
+				break;
+		}
+
+		switch (rightBoundaryConditionType)
+		{
+			case BoundaryConditionType::Dirichlet:
+				solution[sz - 1] = rightValue;
+				break;
+			case BoundaryConditionType::Neumann:
+				solution[sz - 1] = solution[sz - 2] - rightValue * (grid[sz - 1] - grid[sz - 2]);
+				break;
+			case BoundaryConditionType::Periodic:
+				solution[sz - 1] = solution[1];
 			default:
 				break;
 		}

@@ -21,6 +21,9 @@ EXTERN_C
 		*/
 	    AdamsBashforth2 = 4,
 		AdamsMouldon2 = 5,
+
+		__BEGIN__ = 1,
+		__END__ = 6
 	};
 
 	static constexpr unsigned getNumberOfSteps(const SolverType solverType)

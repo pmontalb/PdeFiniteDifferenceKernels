@@ -76,6 +76,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
       <UseHostInclude>true</UseHostInclude>
       <TypeInfo>false</TypeInfo>
       <Warning>Wall</Warning>
+      <CodeGeneration>compute_61,sm_61</CodeGeneration>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -103,7 +104,10 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
       <Include>$(SolutionDir)\..\CudaLightKernels;$(SolutionDir)\PdeFiniteDifferenceKernels;</Include>
       <UseHostInclude>true</UseHostInclude>
       <TypeInfo>false</TypeInfo>
-      <Warning>Wall</Warning>
+      <Warning>W0</Warning>
+      <CodeGeneration>compute_61,sm_61</CodeGeneration>
+      <FastMath>true</FastMath>
+      <Optimization>O3</Optimization>
     </CudaCompile>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
