@@ -103,34 +103,43 @@ namespace detail
 		MemoryCube kVector(0, timeDiscretizer.nRows, timeDiscretizer.nCols, N, timeDiscretizer.memorySpace, timeDiscretizer.mathDomain);
 		_Alloc(kVector);
 
-		MemoryTile eye(timeDiscretizer);
-		_Eye(eye);
-
-		// loop for calculating k_i
-		MemoryTile k_i, k_j;
 		MemoryTile kRhs(timeDiscretizer); // kRhs is a working buffer that stores k_i r.h.s.
 		_Alloc(kRhs);
-		
+
+		// loop for calculating k_i
 		for (unsigned i = 0; i < N; ++i)
 		{
-			extractMatrixBufferFromCube(k_i, kVector, i);
 			_Eye(kRhs);
-			// loop that does the aMatrix * k multiplication
+
+			// aMatrix * k multiplication
 			for (unsigned j = 0; j < i; ++j)
 			{
+				MemoryTile k_j;
 				extractMatrixBufferFromCube(k_j, kVector, j);
 				if (aMatrix[getLowerTriangularIndex(i, j)] != 0.0)
 					_AddEqualMatrix(kRhs, k_j, MatrixOperation::None, MatrixOperation::None, aMatrix[getLowerTriangularIndex(i, j)] * dt);
 			}
+
+			MemoryTile k_i;
+			extractMatrixBufferFromCube(k_i, kVector, i);
 			_Multiply(k_i, spaceDiscretizer, kRhs, spaceDiscretizer.nRows, kRhs.nRows);
 
 			if (aMatrix[getLowerTriangularIndex(i, i)] != 0.0)
 			{
-				// re-se kRhs instead of allocating kLhs
+				// re-set kRhs instead of allocating kLhs
 				_Eye(kRhs);
 				_AddEqual(kRhs, spaceDiscretizer, -aMatrix[getLowerTriangularIndex(i, i)] * dt);
 				_Solve(kRhs, k_i);
 			}
+		}
+
+		//now that all kVector items are set, fo the b * k multiplication
+		_Eye(timeDiscretizer);  // initialise time discretizer with the identity
+		for (unsigned j = 0; j < N; ++j)
+		{
+			MemoryTile k_j;
+			extractMatrixBufferFromCube(k_j, kVector, j);
+			_AddEqualMatrix(timeDiscretizer, k_j, MatrixOperation::None, MatrixOperation::None, bVector[j] * dt);
 		}
 
 		_Free(kVector);
@@ -140,13 +149,79 @@ namespace detail
 	}
 
 
-	int _MakeRungeKuttaGaussLegendre(const std::array<double, 4>& aMatrix,
-									 const std::array<double, 2>& bVector,
-									 const double dt,
+	int _MakeRungeKuttaGaussLegendre(const double dt,
 									 const MemoryTile& spaceDiscretizer,
 									 const MemoryTile& timeDiscretizer)
 	{
-		// TODO:
+		constexpr double a00 = { .25 };
+		constexpr double sqrt3 = { 1.73205080756888 };
+		constexpr double a01 = { .25 - sqrt3 / 6.0 };
+		constexpr double a10 = { .25 + sqrt3 / 6.0 };
+		constexpr double a11 = { .25 };
+
+		MemoryTile eye(timeDiscretizer);
+		_Alloc(eye);
+		_Eye(eye);
+
+		MemoryTile A(timeDiscretizer);
+		_Alloc(A);
+		_Add(A, eye, spaceDiscretizer, -a00 * dt);
+
+		MemoryTile B(timeDiscretizer);
+		_Alloc(B);
+		_DeviceToDeviceCopy(B, spaceDiscretizer);
+		_Solve(A, B);
+		_Scale(B, a10 * dt);
+
+		MemoryTile C(timeDiscretizer);
+		_Alloc(C);
+		_DeviceToDeviceCopy(C, B); 
+		_Scale(C, a01 * dt);
+		_AddEqualMatrix(C, eye, MatrixOperation::None, MatrixOperation::None, a11 * dt);
+
+		MemoryTile C2(timeDiscretizer);
+		_Alloc(C2);
+		_DeviceToDeviceCopy(C2, C);
+		_Multiply(C, spaceDiscretizer, C2, spaceDiscretizer.nRows, C2.nRows);
+		_Free(C2);
+
+		MemoryTile D(timeDiscretizer);
+		_Alloc(D);
+		_Add(D, C, eye, -1);
+
+		MemoryTile E(timeDiscretizer);
+		_Alloc(E);
+		_Add(E, eye, B);
+
+		MemoryTile k_2(timeDiscretizer);
+		_Alloc(k_2);
+		_Multiply(k_2, spaceDiscretizer, E, spaceDiscretizer.nRows, E.nRows);
+		_Solve(D, k_2);
+
+		MemoryTile F(timeDiscretizer);
+		_Alloc(F);
+		_Add(F, eye, k_2, a01 * dt);
+
+		MemoryTile k_1(timeDiscretizer);
+		_Alloc(k_1);
+		_Multiply(k_1, spaceDiscretizer, F, spaceDiscretizer.nRows, E.nRows);
+		_Solve(A, k_1);
+
+		_Eye(timeDiscretizer);
+		_AddEqualMatrix(k_1, k_2);
+		_AddEqualMatrix(timeDiscretizer, k_1, MatrixOperation::None, MatrixOperation::None, .5 * dt);
+
+		_Free(eye);
+		_Free(A);
+		_Free(B);
+		_Free(C);
+		_Free(D);
+		_Free(E);
+		_Free(F);
+
+		_Free(k_1);
+		_Free(k_2);
+
 		return cudaGetLastError();
 	}
 }
@@ -276,12 +351,7 @@ EXTERN_C
 													    { 1.0 / 8.0, 3.0 / 8.0, 3.0 / 8.0, 1.0 / 8.0 }, input.dt, spaceDiscretizer, _timeDiscretizer);
 				break;
 			case SolverType::RungeKuttaGaussLegendre4:
-				// FIXME
-				detail::_MakeRungeKuttaDiscretizer<4>({ 0,
-													  1.0 / 3.0, .0,
-													  -1.0 / 3.0,  1, 0,
-													  1, -1, 1, 0 },
-													  { 1.0 / 8.0, 3.0 / 8.0, 3.0 / 8.0, 1.0 / 8.0 }, input.dt, spaceDiscretizer, _timeDiscretizer);
+				detail::_MakeRungeKuttaGaussLegendre(input.dt, spaceDiscretizer, _timeDiscretizer);
 				break;
 			default:
 				return CudaKernelException::_NotImplementedException;

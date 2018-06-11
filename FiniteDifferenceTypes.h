@@ -32,7 +32,7 @@ EXTERN_C
 		AdamsMouldon2 = 10,
 
 		__BEGIN__ = 1,
-		__END__ = 6
+		__END__ = 11
 	};
 
 	static constexpr unsigned getNumberOfSteps(const SolverType solverType)
