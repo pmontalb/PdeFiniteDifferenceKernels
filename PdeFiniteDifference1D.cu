@@ -256,7 +256,7 @@ EXTERN_C
 				assert(timeDiscretizer.nCubes == 1);
 
 				_Eye(_timeDiscretizer);
-				_AddEqual(_timeDiscretizer, spaceDiscretizer, input.dt);
+				_AddEqualMatrix(_timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, input.dt);
 				break;
 
 			case SolverType::ImplicitEuler:
@@ -264,7 +264,7 @@ EXTERN_C
 				assert(timeDiscretizer.nCubes == 1);
 
 				_Eye(_timeDiscretizer);
-				_AddEqual(_timeDiscretizer, spaceDiscretizer, -input.dt);
+				_AddEqualMatrix(_timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -input.dt);
 				_Invert(_timeDiscretizer);
 				break;
 
@@ -281,22 +281,132 @@ EXTERN_C
 				_DeviceToDeviceCopy(leftOperator, _timeDiscretizer);
 
 				// left and right operator
-				_AddEqual(leftOperator, spaceDiscretizer, -.5 * input.dt);  // A = I - .5 * dt
-				_AddEqual(timeDiscretizer, spaceDiscretizer, .5 * input.dt);  // B = I + .5 * dt
+				_AddEqualMatrix(leftOperator, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -.5 * input.dt);  // A = I - .5 * dt
+				_AddEqualMatrix(timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, .5 * input.dt);  // B = I + .5 * dt
 				_Solve(leftOperator, _timeDiscretizer);
 
 				_Free(leftOperator);
+			}
+			    break;
+
+			case SolverType::RungeKuttaRalston:
+				assert(timeDiscretizer.nCubes == 1);
+				detail::_MakeRungeKuttaDiscretizer<2>({ 0, 
+													    2.0 / 3.0, 0 }, 
+														{ .25, .75 }, input.dt, spaceDiscretizer, _timeDiscretizer);
+				break;
+			case SolverType::RungeKutta3:
+				assert(timeDiscretizer.nCubes == 1);
+				detail::_MakeRungeKuttaDiscretizer<3>({ 0, 
+													    .5, .0, 
+													    -1,  2, 0 }, 
+														{ 1.0 / 6.0, 2.0 / 3.0, 1.0 / 6.0 }, input.dt, spaceDiscretizer, _timeDiscretizer);
+				break;
+			case SolverType::RungeKutta4:
+				assert(timeDiscretizer.nCubes == 1);
+				detail::_MakeRungeKuttaDiscretizer<4>({ 0, 
+													   .5, .0, 
+													    0, .5, 0,
+				                                        0,  0, 1, 0}, 
+														{ 1.0 / 6.0, 1.0 / 3.0, 1.0 / 3.0, 1.0 / 6.0 }, input.dt, spaceDiscretizer, _timeDiscretizer);
+				break;
+			case SolverType::RungeKuttaThreeEight:
+				assert(timeDiscretizer.nCubes == 1);
+				detail::_MakeRungeKuttaDiscretizer<4>({ 0,
+													   1.0 / 3.0, .0,
+													  -1.0 / 3.0,  1, 0,
+													           1, -1, 1, 0 },
+													    { 1.0 / 8.0, 3.0 / 8.0, 3.0 / 8.0, 1.0 / 8.0 }, input.dt, spaceDiscretizer, _timeDiscretizer);
+				break;
+			case SolverType::RungeKuttaGaussLegendre4:
+				assert(timeDiscretizer.nCubes == 1);
+				detail::_MakeRungeKuttaGaussLegendre(input.dt, spaceDiscretizer, _timeDiscretizer);
+				break;
+
+			case SolverType::RichardsonExtrapolation2:
+			{
+				assert(timeDiscretizer.nCubes == 1);
+				_Eye(_timeDiscretizer);
+				_AddEqualMatrix(_timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -input.dt);
+				_Invert(_timeDiscretizer);
+				_Scale(timeDiscretizer, -1.0);
+
+				MemoryTile halfIteration(_timeDiscretizer);
+				_Alloc(halfIteration);
+				_Eye(halfIteration);
+				_AddEqualMatrix(halfIteration, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -.5 * input.dt);
+
+				MemoryTile halfIterationSquared(_timeDiscretizer);
+				_Alloc(halfIterationSquared);
+				_Multiply(halfIterationSquared, halfIteration, halfIteration, halfIteration.nRows, halfIteration.nRows);
+				_Invert(halfIterationSquared);
+
+				_AddEqualMatrix(_timeDiscretizer, halfIterationSquared, MatrixOperation::None, MatrixOperation::None, 2.0);
+
+				_Free(halfIteration);
+				_Free(halfIterationSquared);
+			}
+				break;
+
+			case SolverType::RichardsonExtrapolation3:
+			{
+				assert(timeDiscretizer.nCubes == 1);
+				_Eye(_timeDiscretizer);
+				_AddEqualMatrix(_timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -input.dt);
+				_Invert(_timeDiscretizer);
+
+				// - F
+				_Scale(_timeDiscretizer, -1.0);
+
+				MemoryTile halfIteration(_timeDiscretizer);
+				_Alloc(halfIteration);
+				_Eye(halfIteration);
+				_AddEqualMatrix(halfIteration, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -.5 * input.dt);
+
+				MemoryTile halfIterationSquared(_timeDiscretizer);
+				_Alloc(halfIterationSquared);
+				_Multiply(halfIterationSquared, halfIteration, halfIteration, halfIteration.nRows, halfIteration.nRows);
+				_Invert(halfIterationSquared);  // H
+
+				MemoryTile quarterIteration(_timeDiscretizer);
+				_Alloc(quarterIteration);
+				_Eye(quarterIteration);
+				_AddEqualMatrix(quarterIteration, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -.25 * input.dt);
+
+				MemoryTile quarterIterationFour(_timeDiscretizer);
+				_Alloc(quarterIterationFour);
+				_Multiply(halfIteration, quarterIteration, quarterIteration, quarterIteration.nRows, quarterIteration.nRows);  // re-use halfIteration for convenience
+				_Multiply(quarterIterationFour, halfIteration, halfIteration, halfIteration.nRows, halfIteration.nRows);
+				_Invert(quarterIterationFour);  // Q
+
+				// 2 * H - F
+				_AddEqualMatrix(_timeDiscretizer, halfIterationSquared, MatrixOperation::None, MatrixOperation::None, 2.0);
+
+				// -(2 * H - F) / 3
+				_Scale(_timeDiscretizer, -1.0 / 3.0);
+
+				// 2 * Q - H
+				_Scale(halfIterationSquared, -1);
+				_AddEqualMatrix(halfIterationSquared, quarterIterationFour, MatrixOperation::None, MatrixOperation::None, 2.0);
+
+				// (2 * Q - H) * 4/3 - (2 * H - F) / 3
+				_AddEqualMatrix(_timeDiscretizer, halfIterationSquared, MatrixOperation::None, MatrixOperation::None, 4.0 / 3.0);
+
+				_Free(halfIteration);
+				_Free(halfIterationSquared);
+				_Free(quarterIteration);
+				_Free(quarterIterationFour);
 			}
 			break;
 
 			case SolverType::AdamsBashforth2:
 				// A_{n + 1} = (I + L * 1.5 * dt)
 				assert(timeDiscretizer.nCubes == 2);
-				
+
 				_Eye(_timeDiscretizer);
 				_AddEqual(_timeDiscretizer, spaceDiscretizer, 1.5 * input.dt);  // A = I + 1.5 * dt
 
-				// A_{n} = - L * .5 * dt
+																				// A_{n} = - L * .5 * dt
 				_timeDiscretizer.pointer += _timeDiscretizer.nRows * _timeDiscretizer.nCols * _timeDiscretizer.ElementarySize();
 				_DeviceToDeviceCopy(_timeDiscretizer, spaceDiscretizer);
 				_Scale(_timeDiscretizer, -.5 * input.dt);
@@ -323,36 +433,8 @@ EXTERN_C
 				_Scale(_timeDiscretizer, -1.0 / 12.0 * input.dt);
 				_Solve(leftOperator, _timeDiscretizer);
 			}
-			break;
+			    break;
 
-			case SolverType::RungeKuttaRalston:
-				detail::_MakeRungeKuttaDiscretizer<2>({ 0, 
-													    2.0 / 3.0, 0 }, 
-														{ .25, .75 }, input.dt, spaceDiscretizer, _timeDiscretizer);
-				break;
-			case SolverType::RungeKutta3:
-				detail::_MakeRungeKuttaDiscretizer<3>({ 0, 
-													    .5, .0, 
-													    -1,  2, 0 }, 
-														{ 1.0 / 6.0, 2.0 / 3.0, 1.0 / 6.0 }, input.dt, spaceDiscretizer, _timeDiscretizer);
-				break;
-			case SolverType::RungeKutta4:
-				detail::_MakeRungeKuttaDiscretizer<4>({ 0, 
-													   .5, .0, 
-													    0, .5, 0,
-				                                        0,  0, 1, 0}, 
-														{ 1.0 / 6.0, 1.0 / 3.0, 1.0 / 3.0, 1.0 / 6.0 }, input.dt, spaceDiscretizer, _timeDiscretizer);
-				break;
-			case SolverType::RungeKuttaThreeEight:
-				detail::_MakeRungeKuttaDiscretizer<4>({ 0,
-													   1.0 / 3.0, .0,
-													  -1.0 / 3.0,  1, 0,
-													           1, -1, 1, 0 },
-													    { 1.0 / 8.0, 3.0 / 8.0, 3.0 / 8.0, 1.0 / 8.0 }, input.dt, spaceDiscretizer, _timeDiscretizer);
-				break;
-			case SolverType::RungeKuttaGaussLegendre4:
-				detail::_MakeRungeKuttaGaussLegendre(input.dt, spaceDiscretizer, _timeDiscretizer);
-				break;
 			default:
 				return CudaKernelException::_NotImplementedException;
 		}

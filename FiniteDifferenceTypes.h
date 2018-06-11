@@ -26,13 +26,19 @@ EXTERN_C
 		RungeKuttaGaussLegendre4 = 8,  // 4th order Gauss-Legendre
 
 		/**
+		* Richardson Extrapolation
+		*/
+	    RichardsonExtrapolation2 = 9, 
+		RichardsonExtrapolation3 = 10,
+
+		/**
 		* Multi-Step
 		*/
-	    AdamsBashforth2 = 9,
-		AdamsMouldon2 = 10,
+	    AdamsBashforth2 = 11,
+		AdamsMouldon2 = 12,
 
 		__BEGIN__ = 1,
-		__END__ = 11
+		__END__ = 13
 	};
 
 	static constexpr unsigned getNumberOfSteps(const SolverType solverType)
