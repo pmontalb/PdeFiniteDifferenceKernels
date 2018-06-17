@@ -106,7 +106,7 @@ copy "$(CudaToolkitBinDir)\cudart*.dll" "$(OutDir)"</Command>
       <TypeInfo>false</TypeInfo>
       <Warning>W0</Warning>
       <CodeGeneration>compute_61,sm_61</CodeGeneration>
-      <FastMath>true</FastMath>
+      <FastMath>false</FastMath>
       <Optimization>O3</Optimization>
     </CudaCompile>
   </ItemDefinitionGroup>

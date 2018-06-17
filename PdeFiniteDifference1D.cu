@@ -70,9 +70,6 @@ namespace detail
 	*/
 	int _SetBoundaryConditions1D(MemoryTile solution, const MemoryCube timeDiscretizer, const FiniteDifferenceInput1D input)
 	{
-		if (input.boundaryConditions.left.type == BoundaryConditionType::Periodic && input.boundaryConditions.right.type == BoundaryConditionType::Periodic)
-			return 0;  // no need to call the kernel!
-
 		switch (solution.mathDomain)
 		{
 			case MathDomain::Float:
