@@ -13,7 +13,7 @@ namespace detail
 	*	N.B.: solution is a memory tile, as some solver might require the solution history
 	*	N.B.2: if provided, workBuffer is a previously allocated buffer used for matrix-vector multiplication
 	*/
-	int _Advance1D(MemoryTile solution, const MemoryCube timeDiscretizer, MemoryTile workBuffer, const bool overwriteBuffer)
+	int _Advance(MemoryTile solution, const MemoryCube timeDiscretizer, MemoryTile workBuffer, const bool overwriteBuffer)
 	{
 		// this is to support multi-step algorithms: each solution is multiplied by a different time discretizer
 		MemoryBuffer _solution(solution.pointer, solution.nRows, solution.memorySpace, solution.mathDomain);
@@ -230,10 +230,10 @@ EXTERN_C
 		switch (spaceDiscretizer.mathDomain)
 		{
 			case MathDomain::Float:
-				CUDA_CALL_SINGLE(__MakeSpaceDiscretizer1D__<float>, (float*)spaceDiscretizer.pointer, (float*)input.grid.pointer, (float*)input.velocity.pointer, (float*)input.diffusion.pointer, input.boundaryConditions.left.type, input.boundaryConditions.right.type, (float)input.dt, input.grid.size);
+				CUDA_CALL_SINGLE(__MakeSpaceDiscretizer1D__<float>, (float*)spaceDiscretizer.pointer, (float*)input.grid.pointer, (float*)input.velocity.pointer, (float*)input.diffusion.pointer, input.spaceDiscretizerType, (float)input.dt, input.grid.size);
 				break;
 			case MathDomain::Double:
-				CUDA_CALL_DOUBLE(__MakeSpaceDiscretizer1D__<double>, (double*)spaceDiscretizer.pointer, (double*)input.grid.pointer, (double*)input.velocity.pointer, (double*)input.diffusion.pointer, input.boundaryConditions.left.type, input.boundaryConditions.right.type, input.dt, input.grid.size);
+				CUDA_CALL_DOUBLE(__MakeSpaceDiscretizer1D__<double>, (double*)spaceDiscretizer.pointer, (double*)input.grid.pointer, (double*)input.velocity.pointer, (double*)input.diffusion.pointer, input.spaceDiscretizerType, input.dt, input.grid.size);
 				break;
 			default:
 				return CudaKernelException::_NotImplementedException;
@@ -241,19 +241,19 @@ EXTERN_C
 		return cudaGetLastError();
 	}
 
-	EXPORT int _MakeTimeDiscretizer1D(MemoryCube timeDiscretizer, const MemoryTile spaceDiscretizer, const FiniteDifferenceInput1D input)
+	EXPORT int _MakeTimeDiscretizerAdvectionDiffusion(MemoryCube timeDiscretizer, const MemoryTile spaceDiscretizer, const SolverType solverType, const double dt)
 	{
 		MemoryTile _timeDiscretizer;
 		extractMatrixBufferFromCube(_timeDiscretizer, timeDiscretizer, 0);
 
-		switch (input.solverType)
+		switch (solverType)
 		{
 			case SolverType::ExplicitEuler:
 				// A = I + L * dt
 				assert(timeDiscretizer.nCubes == 1);
 
 				_Eye(_timeDiscretizer);
-				_AddEqualMatrix(_timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, input.dt);
+				_AddEqualMatrix(_timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, dt);
 				break;
 
 			case SolverType::ImplicitEuler:
@@ -261,7 +261,7 @@ EXTERN_C
 				assert(timeDiscretizer.nCubes == 1);
 
 				_Eye(_timeDiscretizer);
-				_AddEqualMatrix(_timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -input.dt);
+				_AddEqualMatrix(_timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -dt);
 				_Invert(_timeDiscretizer);
 				break;
 
@@ -278,8 +278,8 @@ EXTERN_C
 				_DeviceToDeviceCopy(leftOperator, _timeDiscretizer);
 
 				// left and right operator
-				_AddEqualMatrix(leftOperator, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -.5 * input.dt);  // A = I - .5 * dt
-				_AddEqualMatrix(timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, .5 * input.dt);  // B = I + .5 * dt
+				_AddEqualMatrix(leftOperator, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -.5 * dt);  // A = I - .5 * dt
+				_AddEqualMatrix(timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, .5 * dt);  // B = I + .5 * dt
 				_Solve(leftOperator, _timeDiscretizer);
 
 				_Free(leftOperator);
@@ -290,14 +290,14 @@ EXTERN_C
 				assert(timeDiscretizer.nCubes == 1);
 				detail::_MakeRungeKuttaDiscretizer<2>({ 0, 
 													    2.0 / 3.0, 0 }, 
-														{ .25, .75 }, input.dt, spaceDiscretizer, _timeDiscretizer);
+														{ .25, .75 }, dt, spaceDiscretizer, _timeDiscretizer);
 				break;
 			case SolverType::RungeKutta3:
 				assert(timeDiscretizer.nCubes == 1);
 				detail::_MakeRungeKuttaDiscretizer<3>({ 0, 
 													    .5, .0, 
 													    -1,  2, 0 }, 
-														{ 1.0 / 6.0, 2.0 / 3.0, 1.0 / 6.0 }, input.dt, spaceDiscretizer, _timeDiscretizer);
+														{ 1.0 / 6.0, 2.0 / 3.0, 1.0 / 6.0 }, dt, spaceDiscretizer, _timeDiscretizer);
 				break;
 			case SolverType::RungeKutta4:
 				assert(timeDiscretizer.nCubes == 1);
@@ -305,7 +305,7 @@ EXTERN_C
 													   .5, .0, 
 													    0, .5, 0,
 				                                        0,  0, 1, 0}, 
-														{ 1.0 / 6.0, 1.0 / 3.0, 1.0 / 3.0, 1.0 / 6.0 }, input.dt, spaceDiscretizer, _timeDiscretizer);
+														{ 1.0 / 6.0, 1.0 / 3.0, 1.0 / 3.0, 1.0 / 6.0 }, dt, spaceDiscretizer, _timeDiscretizer);
 				break;
 			case SolverType::RungeKuttaThreeEight:
 				assert(timeDiscretizer.nCubes == 1);
@@ -313,25 +313,25 @@ EXTERN_C
 													   1.0 / 3.0, .0,
 													  -1.0 / 3.0,  1, 0,
 													           1, -1, 1, 0 },
-													    { 1.0 / 8.0, 3.0 / 8.0, 3.0 / 8.0, 1.0 / 8.0 }, input.dt, spaceDiscretizer, _timeDiscretizer);
+													    { 1.0 / 8.0, 3.0 / 8.0, 3.0 / 8.0, 1.0 / 8.0 }, dt, spaceDiscretizer, _timeDiscretizer);
 				break;
 			case SolverType::RungeKuttaGaussLegendre4:
 				assert(timeDiscretizer.nCubes == 1);
-				detail::_MakeRungeKuttaGaussLegendre(input.dt, spaceDiscretizer, _timeDiscretizer);
+				detail::_MakeRungeKuttaGaussLegendre(dt, spaceDiscretizer, _timeDiscretizer);
 				break;
 
 			case SolverType::RichardsonExtrapolation2:
 			{
 				assert(timeDiscretizer.nCubes == 1);
 				_Eye(_timeDiscretizer);
-				_AddEqualMatrix(_timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -input.dt);
+				_AddEqualMatrix(_timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -dt);
 				_Invert(_timeDiscretizer);
 				_Scale(timeDiscretizer, -1.0);
 
 				MemoryTile halfIteration(_timeDiscretizer);
 				_Alloc(halfIteration);
 				_Eye(halfIteration);
-				_AddEqualMatrix(halfIteration, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -.5 * input.dt);
+				_AddEqualMatrix(halfIteration, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -.5 * dt);
 
 				MemoryTile halfIterationSquared(_timeDiscretizer);
 				_Alloc(halfIterationSquared);
@@ -349,7 +349,7 @@ EXTERN_C
 			{
 				assert(timeDiscretizer.nCubes == 1);
 				_Eye(_timeDiscretizer);
-				_AddEqualMatrix(_timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -input.dt);
+				_AddEqualMatrix(_timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -dt);
 				_Invert(_timeDiscretizer);
 
 				// - F
@@ -358,7 +358,7 @@ EXTERN_C
 				MemoryTile halfIteration(_timeDiscretizer);
 				_Alloc(halfIteration);
 				_Eye(halfIteration);
-				_AddEqualMatrix(halfIteration, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -.5 * input.dt);
+				_AddEqualMatrix(halfIteration, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -.5 * dt);
 
 				MemoryTile halfIterationSquared(_timeDiscretizer);
 				_Alloc(halfIterationSquared);
@@ -368,7 +368,7 @@ EXTERN_C
 				MemoryTile quarterIteration(_timeDiscretizer);
 				_Alloc(quarterIteration);
 				_Eye(quarterIteration);
-				_AddEqualMatrix(quarterIteration, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -.25 * input.dt);
+				_AddEqualMatrix(quarterIteration, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -.25 * dt);
 
 				MemoryTile quarterIterationFour(_timeDiscretizer);
 				_Alloc(quarterIterationFour);
@@ -401,12 +401,12 @@ EXTERN_C
 				assert(timeDiscretizer.nCubes == 2);
 
 				_Eye(_timeDiscretizer);
-				_AddEqual(_timeDiscretizer, spaceDiscretizer, 1.5 * input.dt);  // A = I + 1.5 * dt
+				_AddEqual(_timeDiscretizer, spaceDiscretizer, 1.5 * dt);  // A = I + 1.5 * dt
 
-																				// A_{n} = - L * .5 * dt
+				// A_{n} = - L * .5 * dt
 				_timeDiscretizer.pointer += _timeDiscretizer.nRows * _timeDiscretizer.nCols * _timeDiscretizer.ElementarySize();
 				_DeviceToDeviceCopy(_timeDiscretizer, spaceDiscretizer);
-				_Scale(_timeDiscretizer, -.5 * input.dt);
+				_Scale(_timeDiscretizer, -.5 * dt);
 				break;
 
 			case SolverType::AdamsMouldon2:
@@ -418,19 +418,53 @@ EXTERN_C
 				MemoryTile leftOperator(_timeDiscretizer);
 				_Alloc(leftOperator);
 				_Eye(leftOperator);
-				_AddEqual(leftOperator, spaceDiscretizer, -5.0 / 12.0 * input.dt);  // A = I - .5 * dt
+				_AddEqual(leftOperator, spaceDiscretizer, -5.0 / 12.0 * dt);  // A = I - .5 * dt
 
 				_Eye(_timeDiscretizer);
-				_AddEqual(_timeDiscretizer, spaceDiscretizer, 2.0 / 3.0 * input.dt);  // A = I - .5 * dt
+				_AddEqual(_timeDiscretizer, spaceDiscretizer, 2.0 / 3.0 * dt);  // A = I - .5 * dt
 				_Solve(leftOperator, _timeDiscretizer);
 
 				// A_{n} = (I - L * 5 / 12 * dt)^(-1) * (- L *  1.0 / 12.0 * dt)
 				_timeDiscretizer.pointer += _timeDiscretizer.nRows * _timeDiscretizer.nCols * _timeDiscretizer.ElementarySize();
 				_DeviceToDeviceCopy(_timeDiscretizer, spaceDiscretizer);
-				_Scale(_timeDiscretizer, -1.0 / 12.0 * input.dt);
+				_Scale(_timeDiscretizer, -1.0 / 12.0 * dt);
 				_Solve(leftOperator, _timeDiscretizer);
 			}
 			    break;
+
+			default:
+				return CudaKernelException::_NotImplementedException;
+		}
+
+		return cudaGetLastError();
+	}
+
+	EXPORT int _MakeTimeDiscretizerWaveEquation(MemoryCube timeDiscretizer, const MemoryTile spaceDiscretizer, const SolverType solverType, const double dt)
+	{
+		MemoryTile _timeDiscretizer;
+		extractMatrixBufferFromCube(_timeDiscretizer, timeDiscretizer, 0);
+
+		switch (solverType)
+		{
+			case SolverType::ExplicitEuler:				
+			{
+				// A = I
+				assert(timeDiscretizer.nCubes == 1);
+
+				_Eye(_timeDiscretizer);
+				break;
+			}
+
+			case SolverType::ImplicitEuler:
+			{
+				// A = (I - L * dt^2)^(-1)
+				assert(timeDiscretizer.nCubes == 1);
+
+				_Eye(_timeDiscretizer);
+				_AddEqualMatrix(_timeDiscretizer, spaceDiscretizer, MatrixOperation::None, MatrixOperation::None, -dt * dt);
+				_Invert(_timeDiscretizer);
+				break;
+			}
 
 			default:
 				return CudaKernelException::_NotImplementedException;
@@ -449,7 +483,7 @@ EXTERN_C
 		int err = 0;
 		for (unsigned n = 0; n < nSteps; ++n)
 		{
-			err = detail::_Advance1D(solution, timeDiscretizer, workBuffer, overwriteBuffer);
+			err = detail::_Advance(solution, timeDiscretizer, workBuffer, overwriteBuffer);
 			if (err)
 				return err;
 
@@ -472,7 +506,7 @@ EXTERN_C
 }
 
 template <typename T>
-GLOBAL void __MakeSpaceDiscretizer1D__(T* RESTRICT spaceDiscretizer, const T* RESTRICT grid, const T* RESTRICT velocity, const T* RESTRICT diffusion, const BoundaryConditionType leftBoundaryConditionType, const BoundaryConditionType rightBoundaryConditionType, const T dt, const unsigned sz)
+GLOBAL void __MakeSpaceDiscretizer1D__(T* RESTRICT spaceDiscretizer, const T* RESTRICT grid, const T* RESTRICT velocity, const T* RESTRICT diffusion, const SpaceDiscretizerType discretizerType, const T dt, const unsigned sz)
 {
 	CUDA_FUNCTION_PROLOGUE;
 
@@ -481,11 +515,57 @@ GLOBAL void __MakeSpaceDiscretizer1D__(T* RESTRICT spaceDiscretizer, const T* RE
 		const T dxPlus = grid[i + 1] - grid[i];
 		const T dxMinus = grid[i] - grid[i - 1];
 		const T dx = dxPlus + dxMinus;
+		
+		const T multiplierMinus = 1.0 / (dxMinus * dx);
+		const T multiplierPlus = 1.0 / (dxPlus  * dx);
 
-		// 3-point centered spatial finite difference that accounts for uneven space mesh
-		spaceDiscretizer[i + sz * (i - 1)] = (-dxPlus  * velocity[i] + static_cast<T>(2.0) * diffusion[i]) / (dxMinus * dx);
-		spaceDiscretizer[i + sz * (i + 1)] = (dxMinus * velocity[i] + static_cast<T>(2.0) * diffusion[i]) / (dxPlus  * dx);
-		spaceDiscretizer[i + sz * i] = -spaceDiscretizer[i + sz * (i - 1)] - spaceDiscretizer[i + sz * (i + 1)];
+		// discretize advection with the given space discretizer
+		if (discretizerType == SpaceDiscretizerType::Centered)
+		{
+			spaceDiscretizer[i + sz * (i - 1)] = -dxPlus  * velocity[i] * multiplierMinus;
+			spaceDiscretizer[i + sz * (i + 1)] =  dxMinus * velocity[i] * multiplierPlus;
+			spaceDiscretizer[i + sz * i] -= spaceDiscretizer[i + sz * (i - 1)] + spaceDiscretizer[i + sz * (i + 1)];
+		}
+		else if (discretizerType == SpaceDiscretizerType::Upwind)
+		{
+			if (velocity[i] > 0)
+			{
+				const T discretizerValue = velocity[i] / dxPlus;
+				spaceDiscretizer[i + sz * (i + 1)] =  discretizerValue;
+				spaceDiscretizer[i + sz * i      ] = -discretizerValue;
+			}
+			else
+			{
+				const T discretizerValue = velocity[i] / dxMinus;
+				spaceDiscretizer[i + sz * i      ] =  discretizerValue;
+				spaceDiscretizer[i + sz * (i - 1)] = -discretizerValue;
+			}
+		}
+		else if (discretizerType == SpaceDiscretizerType::LaxWendroff)
+		{
+			// discretize with a centered scheme
+			spaceDiscretizer[i + sz * (i - 1)] = -dxPlus  * velocity[i] * multiplierMinus;
+			spaceDiscretizer[i + sz * (i + 1)] = dxMinus * velocity[i] * multiplierPlus;
+			// central point will be corrected along with diffusion!
+			
+			// add artifical diffusion: .5 * velocity^2 * dt
+			const T diffusionMultiplier = velocity[i] * velocity[i] * dt;
+			const T diffusionContributionMinus = diffusionMultiplier * multiplierMinus;
+			const T diffusionContributionPlus = diffusionMultiplier * multiplierPlus;
+			spaceDiscretizer[i + sz * (i - 1)] += diffusionContributionMinus;
+			spaceDiscretizer[i + sz * (i + 1)] += diffusionContributionPlus;
+
+			// correct for both advection and artifical diffusion
+			spaceDiscretizer[i + sz * i] -= spaceDiscretizer[i + sz * (i - 1)] + spaceDiscretizer[i + sz * (i + 1)];
+		}
+
+		// discretize diffusion with 3 points
+		const T diffusionMultiplier = static_cast<T>(2.0) * diffusion[i];
+		const T diffusionContributionMinus = diffusionMultiplier * multiplierMinus;
+		const T diffusionContributionPlus = diffusionMultiplier * multiplierPlus;
+		spaceDiscretizer[i + sz * (i - 1)] += diffusionContributionMinus;
+		spaceDiscretizer[i + sz * (i + 1)] += diffusionContributionPlus;
+		spaceDiscretizer[i + sz * i] -= diffusionContributionMinus + diffusionContributionPlus;
 	}
 }
 

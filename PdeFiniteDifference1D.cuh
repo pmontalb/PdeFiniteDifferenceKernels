@@ -16,7 +16,13 @@ EXTERN_C
 	*	Calculates the time discretization for the ODE (that comes from the space discretization of the advection-diffusion PDE)
 			u' = L * u
 	*/
-    EXPORT int _MakeTimeDiscretizer1D(MemoryCube timeDiscretizer, const MemoryTile spaceDiscretizer, const FiniteDifferenceInput1D input);
+    EXPORT int _MakeTimeDiscretizerAdvectionDiffusion(MemoryCube timeDiscretizer, const MemoryTile spaceDiscretizer, const SolverType solverType, const double dt);
+
+	/**
+	*	Calculates the time discretization for the ODE (that comes from the space discretization of the advection-diffusion PDE)
+			u'' = L * u
+	*/
+	EXPORT int _MakeTimeDiscretizerWaveEquation(MemoryCube timeDiscretizer, const MemoryTile spaceDiscretizer, const SolverType solverType, const double dt);
 
 	/**
 	*	Evolve the solution for nSteps steps using the time discretizer, and sets the boundary conditions
@@ -29,7 +35,7 @@ EXTERN_C
 }
 
 template <typename T>
-GLOBAL void __MakeSpaceDiscretizer1D__(T* RESTRICT spaceDiscretizer, const T* RESTRICT grid, const T* RESTRICT velocity, const T* RESTRICT diffusion, const BoundaryConditionType leftBoundaryConditionType, const BoundaryConditionType rightBoundaryConditionType, const T dt, const unsigned sz);
+GLOBAL void __MakeSpaceDiscretizer1D__(T* RESTRICT spaceDiscretizer, const T* RESTRICT grid, const T* RESTRICT velocity, const T* RESTRICT diffusion, const SpaceDiscretizerType discretizerType, const T dt, const unsigned sz);
 
 template <typename T>
 GLOBAL void __SetBoundaryConditions1D__(T* RESTRICT solution, T* RESTRICT timeDiscretizer, const T leftValue, const T rightValue, const BoundaryConditionType leftBoundaryConditionType, const BoundaryConditionType rightBoundaryConditionType, const T* RESTRICT grid, const unsigned sz);

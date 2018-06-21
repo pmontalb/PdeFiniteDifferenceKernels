@@ -5,6 +5,9 @@
 
 EXTERN_C
 {
+	/**
+	* Defines the time discretizer type
+	*/
 	enum class SolverType
 	{
 		Null = 0,
@@ -53,9 +56,22 @@ EXTERN_C
 		}
 	}
 
+	/**
+	* Defines how to discretize on the space dimension 
+	*/
+	enum class SpaceDiscretizerType
+	{
+		Null = 0,
+
+		Centered = 1,
+		Upwind = 2,
+		LaxWendroff = 3
+	};
+
 	enum class BoundaryConditionType
 	{
 		Null = 0,
+
 		Dirichlet = 1,
 		Neumann = 2,
 		Periodic = 3,
@@ -142,6 +158,11 @@ EXTERN_C
 		SolverType solverType;
 
 		/**
+		* Space Discretizer Type
+		*/
+		SpaceDiscretizerType spaceDiscretizerType;
+
+		/**
 		* Left/Right boundary conditions
 		*/
 		BoundaryCondition1D boundaryConditions;
@@ -151,6 +172,7 @@ EXTERN_C
 								MemoryBuffer velocity,
 								MemoryBuffer diffusion,
 								SolverType solverType,
+								SpaceDiscretizerType spaceDiscretizerType,
 								BoundaryCondition1D boundaryConditions)
 			:
 			dt(dt),
@@ -158,6 +180,7 @@ EXTERN_C
 			velocity(velocity),
 			diffusion(diffusion),
 			solverType(solverType),
+			spaceDiscretizerType(spaceDiscretizerType),
 			boundaryConditions(boundaryConditions)
 		{
 		}
@@ -167,5 +190,79 @@ EXTERN_C
 		FiniteDifferenceInput1D(FiniteDifferenceInput1D&& rhs) noexcept = default;
 		FiniteDifferenceInput1D& operator=(const FiniteDifferenceInput1D& rhs) noexcept = default;
 		FiniteDifferenceInput1D& operator=(FiniteDifferenceInput1D&& rhs) noexcept = default;
+	};
+
+	struct FiniteDifferenceInput2D
+	{
+		/**
+		* Time discretization mesh size
+		*/
+		double dt;
+
+		/**
+		* Space discretization mesh - x direction
+		*/
+		MemoryBuffer xGrid;
+		/**
+		* Space discretization mesh - y direction
+		*/
+		MemoryBuffer yGrid;
+
+		/**
+		* Advection coefficient - x direction
+		*/
+		MemoryBuffer xVelocity;
+		/**
+		* Advection coefficient - y direction
+		*/
+		MemoryBuffer yVelocity;
+
+		/**
+		* Diffusion coefficient
+		*/
+		MemoryBuffer diffusion;
+
+		/**
+		* Solver Type
+		*/
+		SolverType solverType;
+
+		/**
+		* Space Discretizer Type
+		*/
+		SpaceDiscretizerType spaceDiscretizerType;
+
+		/**
+		* Left/Right boundary conditions
+		*/
+		BoundaryCondition2D boundaryConditions;
+
+		FiniteDifferenceInput2D(double dt,
+								MemoryBuffer xGrid,
+								MemoryBuffer yGrid,
+								MemoryBuffer xVelocity,
+								MemoryBuffer yVelocity,
+								MemoryBuffer diffusion,
+								SolverType solverType,
+								SpaceDiscretizerType spaceDiscretizerType,
+								BoundaryCondition2D boundaryConditions)
+			:
+			dt(dt),
+			xGrid(xGrid),
+			yGrid(yGrid),
+			xVelocity(xVelocity),
+			yVelocity(yVelocity),
+			diffusion(diffusion),
+			solverType(solverType),
+			spaceDiscretizerType(spaceDiscretizerType),
+			boundaryConditions(boundaryConditions)
+		{
+		}
+
+		virtual ~FiniteDifferenceInput2D() noexcept = default;
+		FiniteDifferenceInput2D(const FiniteDifferenceInput2D& rhs) noexcept = default;
+		FiniteDifferenceInput2D(FiniteDifferenceInput2D&& rhs) noexcept = default;
+		FiniteDifferenceInput2D& operator=(const FiniteDifferenceInput2D& rhs) noexcept = default;
+		FiniteDifferenceInput2D& operator=(FiniteDifferenceInput2D&& rhs) noexcept = default;
 	};
 }
