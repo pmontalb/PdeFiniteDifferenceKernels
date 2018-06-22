@@ -13,6 +13,11 @@ EXTERN_C
 	EXPORT int _MakeSpaceDiscretizer1D(MemoryTile spaceDiscretizer, const FiniteDifferenceInput1D input);
 
 	/**
+	*	Sets the boundary conditions in the solution. It's a bit of a waste calling a kernel<<<1, 1>>>, but I found no other good way!
+	*/
+    EXPORT int _SetBoundaryConditions1D(MemoryTile solution, const FiniteDifferenceInput1D input);
+
+	/**
 	*	Calculates the time discretization for the ODE (that comes from the space discretization of the advection-diffusion PDE)
 			u' = L * u
 	*/
@@ -38,4 +43,4 @@ template <typename T>
 GLOBAL void __MakeSpaceDiscretizer1D__(T* RESTRICT spaceDiscretizer, const T* RESTRICT grid, const T* RESTRICT velocity, const T* RESTRICT diffusion, const SpaceDiscretizerType discretizerType, const T dt, const unsigned sz);
 
 template <typename T>
-GLOBAL void __SetBoundaryConditions1D__(T* RESTRICT solution, T* RESTRICT timeDiscretizer, const T leftValue, const T rightValue, const BoundaryConditionType leftBoundaryConditionType, const BoundaryConditionType rightBoundaryConditionType, const T* RESTRICT grid, const unsigned sz);
+GLOBAL void __SetBoundaryConditions1D__(T* RESTRICT solution, const T leftValue, const T rightValue, const BoundaryConditionType leftBoundaryConditionType, const BoundaryConditionType rightBoundaryConditionType, const T* RESTRICT grid, const unsigned sz);

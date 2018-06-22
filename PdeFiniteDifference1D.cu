@@ -65,25 +65,6 @@ namespace detail
 		return cudaGetLastError();
 	}
 
-	/**
-	*	Sets the boundary conditions in the solution. It's a bit of a waste calling a kernel<<<1, 1>>>, but I found no other good way!
-	*/
-	int _SetBoundaryConditions1D(MemoryTile solution, const MemoryCube timeDiscretizer, const FiniteDifferenceInput1D input)
-	{
-		switch (solution.mathDomain)
-		{
-			case MathDomain::Float:
-				CUDA_CALL_XY(__SetBoundaryConditions1D__<float>, 1, 1, (float*)solution.pointer, (float*)timeDiscretizer.pointer, (float)input.boundaryConditions.left.value, (float)input.boundaryConditions.right.value, input.boundaryConditions.left.type, input.boundaryConditions.right.type, (float*)input.grid.pointer, solution.nRows);
-				break;
-			case MathDomain::Double:
-				CUDA_CALL_XY(__SetBoundaryConditions1D__<double>, 1, 1, (double*)solution.pointer, (double*)timeDiscretizer.pointer, input.boundaryConditions.left.value, input.boundaryConditions.right.value, input.boundaryConditions.left.type, input.boundaryConditions.right.type, (double*)input.grid.pointer, solution.nRows);
-				break;
-			default:
-				return CudaKernelException::_NotImplementedException;
-		}
-		return cudaGetLastError();
-	}
-
 	// N is the size of the Butcher tableau table
 	// aMatrix is the lower triangular tableau matrix. If the diagonal is populated the method is an implicit RK
 	// bvector is the vector used for composing the "k"'s 
@@ -234,6 +215,25 @@ EXTERN_C
 				break;
 			case MathDomain::Double:
 				CUDA_CALL_DOUBLE(__MakeSpaceDiscretizer1D__<double>, (double*)spaceDiscretizer.pointer, (double*)input.grid.pointer, (double*)input.velocity.pointer, (double*)input.diffusion.pointer, input.spaceDiscretizerType, input.dt, input.grid.size);
+				break;
+			default:
+				return CudaKernelException::_NotImplementedException;
+		}
+		return cudaGetLastError();
+	}
+
+	/**
+	*	Sets the boundary conditions in the solution. It's a bit of a waste calling a kernel<<<1, 1>>>, but I found no other good way!
+	*/
+    EXPORT int _SetBoundaryConditions1D(MemoryTile solution, const FiniteDifferenceInput1D input)
+	{
+		switch (solution.mathDomain)
+		{
+			case MathDomain::Float:
+				CUDA_CALL_XY(__SetBoundaryConditions1D__<float>, 1, 1, (float*)solution.pointer, (float)input.boundaryConditions.left.value, (float)input.boundaryConditions.right.value, input.boundaryConditions.left.type, input.boundaryConditions.right.type, (float*)input.grid.pointer, solution.nRows);
+				break;
+			case MathDomain::Double:
+				CUDA_CALL_XY(__SetBoundaryConditions1D__<double>, 1, 1, (double*)solution.pointer, input.boundaryConditions.left.value, input.boundaryConditions.right.value, input.boundaryConditions.left.type, input.boundaryConditions.right.type, (double*)input.grid.pointer, solution.nRows);
 				break;
 			default:
 				return CudaKernelException::_NotImplementedException;
@@ -488,7 +488,7 @@ EXTERN_C
 				return err;
 
 			// set boundary conditions
-			err = detail::_SetBoundaryConditions1D(overwriteBuffer ? workBuffer : solution, timeDiscretizer, input);
+			err = _SetBoundaryConditions1D(overwriteBuffer ? workBuffer : solution, input);
 			if (err)
 				return err;
 
@@ -570,7 +570,7 @@ GLOBAL void __MakeSpaceDiscretizer1D__(T* RESTRICT spaceDiscretizer, const T* RE
 }
 
 template <typename T>
-GLOBAL void __SetBoundaryConditions1D__(T* RESTRICT solution, T* RESTRICT timeDiscretizer, const T leftValue, const T rightValue, const BoundaryConditionType leftBoundaryConditionType, const BoundaryConditionType rightBoundaryConditionType, const T* RESTRICT grid, const unsigned sz)
+GLOBAL void __SetBoundaryConditions1D__(T* RESTRICT solution, const T leftValue, const T rightValue, const BoundaryConditionType leftBoundaryConditionType, const BoundaryConditionType rightBoundaryConditionType, const T* RESTRICT grid, const unsigned sz)
 {
 	unsigned int tid = blockIdx.x * blockDim.x + threadIdx.x;
 
