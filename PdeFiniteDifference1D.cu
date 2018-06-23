@@ -208,6 +208,9 @@ EXTERN_C
 {
 	EXPORT int _MakeSpaceDiscretizer1D(MemoryTile spaceDiscretizer, const FiniteDifferenceInput1D input)
 	{
+	    if (input.spaceDiscretizerType == SpaceDiscretizerType::Null)
+			return CudaKernelException::_NotImplementedException;
+
 		switch (spaceDiscretizer.mathDomain)
 		{
 			case MathDomain::Float:
