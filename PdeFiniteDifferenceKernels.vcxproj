@@ -12,9 +12,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="FiniteDifferenceTypes.h" />
+    <ClInclude Include="PdeFiniteDifference.cuh" />
     <ClInclude Include="PdeFiniteDifference1D.cuh" />
   </ItemGroup>
   <ItemGroup>
+    <CudaCompile Include="PdeFiniteDifference.cu" />
     <CudaCompile Include="PdeFiniteDifference1D.cu" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

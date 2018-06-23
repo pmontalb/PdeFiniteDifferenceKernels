@@ -18,18 +18,6 @@ EXTERN_C
     EXPORT int _SetBoundaryConditions1D(MemoryTile solution, const FiniteDifferenceInput1D input);
 
 	/**
-	*	Calculates the time discretization for the ODE (that comes from the space discretization of the advection-diffusion PDE)
-			u' = L * u
-	*/
-    EXPORT int _MakeTimeDiscretizerAdvectionDiffusion(MemoryCube timeDiscretizer, const MemoryTile spaceDiscretizer, const SolverType solverType, const double dt);
-
-	/**
-	*	Calculates the time discretization for the ODE (that comes from the space discretization of the advection-diffusion PDE)
-			u'' = L * u
-	*/
-	EXPORT int _MakeTimeDiscretizerWaveEquation(MemoryCube timeDiscretizer, const MemoryTile spaceDiscretizer, const SolverType solverType, const double dt);
-
-	/**
 	*	Evolve the solution for nSteps steps using the time discretizer, and sets the boundary conditions
 	*	N.B.: 
 	*		* solution is a memory tile, as multi-step solvers require the solution history
