@@ -87,53 +87,9 @@ GLOBAL void __MakeSpaceDiscretizer1D__(T* RESTRICT spaceDiscretizer, const T* RE
 		const T multiplierMinus = 1.0 / (dxMinus * dx);
 		const T multiplierPlus = 1.0 / (dxPlus  * dx);
 
-		// discretize advection with the given space discretizer
-		if (discretizerType == SpaceDiscretizerType::Centered)
-		{
-			spaceDiscretizer[i + sz * (i - 1)] = -dxPlus  * velocity[i] * multiplierMinus;
-			spaceDiscretizer[i + sz * (i + 1)] =  dxMinus * velocity[i] * multiplierPlus;
-			spaceDiscretizer[i + sz * i] -= spaceDiscretizer[i + sz * (i - 1)] + spaceDiscretizer[i + sz * (i + 1)];
-		}
-		else if (discretizerType == SpaceDiscretizerType::Upwind)
-		{
-			if (velocity[i] > 0)
-			{
-				const T discretizerValue = velocity[i] / dxPlus;
-				spaceDiscretizer[i + sz * (i + 1)] =  discretizerValue;
-				spaceDiscretizer[i + sz * i      ] = -discretizerValue;
-			}
-			else
-			{
-				const T discretizerValue = velocity[i] / dxMinus;
-				spaceDiscretizer[i + sz * i      ] =  discretizerValue;
-				spaceDiscretizer[i + sz * (i - 1)] = -discretizerValue;
-			}
-		}
-		else if (discretizerType == SpaceDiscretizerType::LaxWendroff)
-		{
-			// discretize with a centered scheme
-			spaceDiscretizer[i + sz * (i - 1)] = -dxPlus  * velocity[i] * multiplierMinus;
-			spaceDiscretizer[i + sz * (i + 1)] = dxMinus * velocity[i] * multiplierPlus;
-			// central point will be corrected along with diffusion!
-			
-			// add artifical diffusion: .5 * velocity^2 * dt
-			const T diffusionMultiplier = velocity[i] * velocity[i] * dt;
-			const T diffusionContributionMinus = diffusionMultiplier * multiplierMinus;
-			const T diffusionContributionPlus = diffusionMultiplier * multiplierPlus;
-			spaceDiscretizer[i + sz * (i - 1)] += diffusionContributionMinus;
-			spaceDiscretizer[i + sz * (i + 1)] += diffusionContributionPlus;
-
-			// correct for both advection and artifical diffusion
-			spaceDiscretizer[i + sz * i] -= spaceDiscretizer[i + sz * (i - 1)] + spaceDiscretizer[i + sz * (i + 1)];
-		}
-
-		// discretize diffusion with 3 points
-		const T diffusionMultiplier = static_cast<T>(2.0) * diffusion[i];
-		const T diffusionContributionMinus = diffusionMultiplier * multiplierMinus;
-		const T diffusionContributionPlus = diffusionMultiplier * multiplierPlus;
-		spaceDiscretizer[i + sz * (i - 1)] += diffusionContributionMinus;
-		spaceDiscretizer[i + sz * (i + 1)] += diffusionContributionPlus;
-		spaceDiscretizer[i + sz * i] -= diffusionContributionMinus + diffusionContributionPlus;
+		__MakeSpaceDiscretizerWorker__<T>(spaceDiscretizer[i + sz * (i + 1)], spaceDiscretizer[i + sz * i], spaceDiscretizer[i + sz * (i - 1)], discretizerType,
+									   velocity[i], diffusion[i],
+									   dxPlus, dxMinus, dx, multiplierMinus, multiplierPlus, dt);
 	}
 }
 
@@ -145,18 +101,6 @@ GLOBAL void __SetBoundaryConditions1D__(T* RESTRICT solution, const T leftValue,
 	// update boundary condition only for the most recent solution, which is the first column of the solution matrix
 	if (tid == 0)
 	{
-		// Dirichlet:  1 0 ...  0 0
-		//			   0 0 ...  0 0
-		//			   0 0 ...  0 1
-
-		// Neumann: -2 1 ...  0 0
-		//			 0 0 ...  0 0
-		//			 0 0 ... -1 0
-
-		// Periodic: -1 0 ... 1  0
-		//			  0 0 ... 0  0
-		//			  0 1 ... 0 -1
-
 		switch (leftBoundaryConditionType)
 		{
 			case BoundaryConditionType::Dirichlet:

@@ -7,6 +7,9 @@
     <CudaCompile Include="PdeFiniteDifference1D.cu">
       <Filter>1D</Filter>
     </CudaCompile>
+    <CudaCompile Include="PdeFiniteDifference2D.cu">
+      <Filter>2D</Filter>
+    </CudaCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="FiniteDifferenceTypes.h" />
@@ -16,6 +19,9 @@
     <ClInclude Include="PdeFiniteDifference1D.cuh">
       <Filter>1D</Filter>
     </ClInclude>
+    <ClInclude Include="PdeFiniteDifference2D.cuh">
+      <Filter>2D</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Generic">
@@ -23,6 +29,9 @@
     </Filter>
     <Filter Include="1D">
       <UniqueIdentifier>{9393f94c-a519-4d7f-8210-991d3a3e47ab}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="2D">
+      <UniqueIdentifier>{670d23fe-5658-4c66-815e-43ce22dd1456}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

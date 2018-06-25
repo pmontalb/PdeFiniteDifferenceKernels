@@ -102,3 +102,60 @@ EXTERN_C
 	EXPORT int _MakeTimeDiscretizerWaveEquation(MemoryCube timeDiscretizer, const MemoryTile spaceDiscretizer, const SolverType solverType, const double dt);
 }
 
+template <typename T>
+__forceinline__  DEVICE void __MakeSpaceDiscretizerWorker__(T& up, T& mid, T& down,
+										   SpaceDiscretizerType discretizerType,
+										   const T velocity, const T diffusion,
+										   const T dPlus, const T dMinus, const T dMid,
+										   const T multiplierMinus, const T multiplierPlus,
+										   const T dt)
+{
+	// discretize advection with the given space discretizer
+	if (discretizerType == SpaceDiscretizerType::Centered)
+	{
+		down -= dPlus  * velocity * multiplierMinus;
+		up += dMinus  * velocity * multiplierPlus;
+		mid += down + up;
+	}
+	else if (discretizerType == SpaceDiscretizerType::Upwind)
+	{
+		if (velocity > 0)
+		{
+			const T discretizerValue = velocity / dPlus;
+			up += discretizerValue;
+			mid -= discretizerValue;
+		}
+		else
+		{
+			const T discretizerValue = velocity / dMinus;
+			mid += discretizerValue;
+			down -= discretizerValue;
+		}
+	}
+	else if (discretizerType == SpaceDiscretizerType::LaxWendroff)
+	{
+		// discretize with a centered scheme
+		down -= dPlus  * velocity * multiplierMinus;
+		up += dMinus * velocity * multiplierPlus;
+		// central point will be corrected along with diffusion!
+
+		// add artifical diffusion: .5 * velocity^2 * dt
+		const T diffusionMultiplier = velocity * velocity * dt;
+		const T diffusionContributionMinus = diffusionMultiplier * multiplierMinus;
+		const T diffusionContributionPlus = diffusionMultiplier * multiplierPlus;
+		down += diffusionContributionMinus;
+		up += diffusionContributionPlus;
+
+		// correct for both advection and artifical diffusion
+		mid -= down + up;
+	}
+
+	// discretize diffusion with 3 points
+	const T diffusionMultiplier = static_cast<T>(2.0) * diffusion;
+	const T diffusionContributionMinus = diffusionMultiplier * multiplierMinus;
+	const T diffusionContributionPlus = diffusionMultiplier * multiplierPlus;
+	down += diffusionContributionMinus;
+	up += diffusionContributionPlus;
+	mid -= diffusionContributionMinus + diffusionContributionPlus;
+}
+
