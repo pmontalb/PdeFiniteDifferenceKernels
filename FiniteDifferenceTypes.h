@@ -82,8 +82,8 @@ EXTERN_C
 		BoundaryConditionType type = BoundaryConditionType::Neumann;
 		double value = 0.0;
 
-		BoundaryCondition(const BoundaryConditionType type = BoundaryConditionType::Neumann, const double value = 0.0)
-			: type(type), value(value)
+		BoundaryCondition(const BoundaryConditionType type_ = BoundaryConditionType::Neumann, const double value_ = 0.0)
+			: type(type_), value(value_)
 		{
 		}
 
@@ -100,8 +100,8 @@ EXTERN_C
 		BoundaryCondition left = BoundaryCondition();
 		BoundaryCondition right = BoundaryCondition();
 
-		BoundaryCondition1D(BoundaryCondition left = BoundaryCondition(), BoundaryCondition right = BoundaryCondition())
-			: left(left), right(right)
+		BoundaryCondition1D(BoundaryCondition left_ = BoundaryCondition(), BoundaryCondition right_ = BoundaryCondition())
+			: left(left_), right(right_)
 		{
 		}
 
@@ -118,8 +118,8 @@ EXTERN_C
 		BoundaryCondition down = BoundaryCondition();
 		BoundaryCondition up = BoundaryCondition();
 
-		BoundaryCondition2D(BoundaryCondition left = BoundaryCondition(), BoundaryCondition right = BoundaryCondition(), BoundaryCondition down = BoundaryCondition(), BoundaryCondition up = BoundaryCondition())
-			: BoundaryCondition1D(left, right), down(down), up(up)
+		BoundaryCondition2D(BoundaryCondition left_ = BoundaryCondition(), BoundaryCondition right_ = BoundaryCondition(), BoundaryCondition down_ = BoundaryCondition(), BoundaryCondition up_ = BoundaryCondition())
+			: BoundaryCondition1D(left_, right_), down(down_), up(up_)
 		{
 		}
 
@@ -167,21 +167,21 @@ EXTERN_C
 		*/
 		BoundaryCondition1D boundaryConditions;
 
-		FiniteDifferenceInput1D(double dt,
-								MemoryBuffer grid,
-								MemoryBuffer velocity,
-								MemoryBuffer diffusion,
-								SolverType solverType,
-								SpaceDiscretizerType spaceDiscretizerType,
-								BoundaryCondition1D boundaryConditions)
+		FiniteDifferenceInput1D(double dt_,
+								MemoryBuffer grid_,
+								MemoryBuffer velocity_,
+								MemoryBuffer diffusion_,
+								SolverType solverType_,
+								SpaceDiscretizerType spaceDiscretizerType_,
+								BoundaryCondition1D boundaryConditions_)
 			:
-			dt(dt),
-			grid(grid),
-			velocity(velocity),
-			diffusion(diffusion),
-			solverType(solverType),
-			spaceDiscretizerType(spaceDiscretizerType),
-			boundaryConditions(boundaryConditions)
+			dt(dt_),
+			grid(grid_),
+			velocity(velocity_),
+			diffusion(diffusion_),
+			solverType(solverType_),
+			spaceDiscretizerType(spaceDiscretizerType_),
+			boundaryConditions(boundaryConditions_)
 		{
 		}
 
@@ -237,25 +237,25 @@ EXTERN_C
 		*/
 		BoundaryCondition2D boundaryConditions;
 
-		FiniteDifferenceInput2D(double dt,
-								MemoryBuffer xGrid,
-								MemoryBuffer yGrid,
-								MemoryBuffer xVelocity,
-								MemoryBuffer yVelocity,
-								MemoryBuffer diffusion,
-								SolverType solverType,
-								SpaceDiscretizerType spaceDiscretizerType,
-								BoundaryCondition2D boundaryConditions)
+		FiniteDifferenceInput2D(double dt_,
+								MemoryBuffer xGrid_,
+								MemoryBuffer yGrid_,
+								MemoryBuffer xVelocity_,
+								MemoryBuffer yVelocity_,
+								MemoryBuffer diffusion_,
+								SolverType solverType_,
+								SpaceDiscretizerType spaceDiscretizerType_,
+								BoundaryCondition2D boundaryConditions_)
 			:
-			dt(dt),
-			xGrid(xGrid),
-			yGrid(yGrid),
-			xVelocity(xVelocity),
-			yVelocity(yVelocity),
-			diffusion(diffusion),
-			solverType(solverType),
-			spaceDiscretizerType(spaceDiscretizerType),
-			boundaryConditions(boundaryConditions)
+			dt(dt_),
+			xGrid(xGrid_),
+			yGrid(yGrid_),
+			xVelocity(xVelocity_),
+			yVelocity(yVelocity_),
+			diffusion(diffusion_),
+			solverType(solverType_),
+			spaceDiscretizerType(spaceDiscretizerType_),
+			boundaryConditions(boundaryConditions_)
 		{
 		}
 
