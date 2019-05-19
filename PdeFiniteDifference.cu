@@ -1,5 +1,3 @@
-#pragma once
-
 #include "PdeFiniteDifference.cuh"
 
 namespace detail
@@ -39,7 +37,6 @@ namespace detail
 			_timeDiscretizer.pointer = timeDiscretizer.pointer + i * _timeDiscretizer.TotalSize();
 			_Dot(*_out, _timeDiscretizer, *_in);
 		}
-		int err = cudaGetLastError();
 
 		// add the partial results into the latest solution
 
@@ -49,13 +46,11 @@ namespace detail
 			_out->pointer = outPtr;
 			_in->pointer = outPtr + i * _in->TotalSize();  // re-use _in for convenience!
 			_AddEqual(*_out, *_in);
-			err = cudaGetLastError();
 
 			// copy the input solution into the older solution buffers
 			_out->pointer = _in->pointer;
 			_in->pointer = inPtr + i * _in->TotalSize();
 			_DeviceToDeviceCopy(*_out, *_in);
-			err = cudaGetLastError();
 		}
 
 		return cudaGetLastError();
