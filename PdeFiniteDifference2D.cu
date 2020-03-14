@@ -7,7 +7,7 @@ EXTERN_C
 	*	Calculates the space discretization for the advection-diffusion equation
 			u_t = (xVelocity, yVelocity) * grad(u) + diffusion * laplacian(u)
 	*/
-	EXPORT int _MakeSpaceDiscretizer2D(MemoryTile spaceDiscretizer, const FiniteDifferenceInput2D input)
+	EXPORT int _MakeSpaceDiscretizer2D(MemoryTile& spaceDiscretizer, const FiniteDifferenceInput2D& input)
     {
 		if (input.spaceDiscretizerType == SpaceDiscretizerType::Null)
 			return CudaKernelException::_NotImplementedException;
@@ -35,7 +35,7 @@ EXTERN_C
 		return cudaGetLastError();
     }
 
-	EXPORT int _SetBoundaryConditions2D(MemoryTile solution, const FiniteDifferenceInput2D input)
+	EXPORT int _SetBoundaryConditions2D(MemoryTile& solution, const FiniteDifferenceInput2D& input)
 	{
 		const dim3 grid(32, 32);
 		const dim3 blocks(8, 8);
@@ -75,10 +75,10 @@ EXTERN_C
 	*		* if provided, workBuffer is a previously allocated buffer used for matrix-vector multiplication
 	*		* the more the steps, the more efficient it will be, as there's less overhead in creating and destroying volatile buffers
 	*/
-	EXPORT int _Iterate2D(MemoryTile solution, const MemoryCube timeDiscretizer, const FiniteDifferenceInput2D input, const unsigned nSteps)
+	EXPORT int _Iterate2D(MemoryTile& solution, const MemoryCube& timeDiscretizer, const FiniteDifferenceInput2D& input, const unsigned nSteps)
 	{
 		// allocate a volatile buffer, used for the matrix-vector dot-product
-		MemoryTile workBuffer = MemoryTile(solution);
+		MemoryTile workBuffer = solution;
 		_Alloc(workBuffer);
 
 		bool overwriteBuffer = true;

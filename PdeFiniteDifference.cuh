@@ -17,7 +17,7 @@ namespace detail
 	*	N.B.: solution is a memory tile, as some solver might require the solution history
 	*	N.B.2: if provided, workBuffer is a previously allocated buffer used for matrix-vector multiplication
 	*/
-	int _Advance(MemoryTile solution, const MemoryCube timeDiscretizer, MemoryTile workBuffer, const bool overwriteBuffer);
+	int _Advance(MemoryTile& solution, const MemoryCube& timeDiscretizer, MemoryTile& workBuffer, const bool overwriteBuffer);
 
 	// N is the size of the Butcher tableau table
 	// aMatrix is the lower triangular tableau matrix. If the diagonal is populated the method is an implicit RK
@@ -28,7 +28,7 @@ namespace detail
 								   const std::array<double, N>& bVector,
 								   const double dt,
 								   const MemoryTile& spaceDiscretizer,
-								   const MemoryTile& timeDiscretizer)
+								   MemoryTile& timeDiscretizer)
 	{
 		auto getLowerTriangularIndex = [](const unsigned i, const unsigned j)
 		{
@@ -50,14 +50,14 @@ namespace detail
 			for (unsigned j = 0; j < i; ++j)
 			{
 				MemoryTile k_j;
-				extractMatrixBufferFromCube(k_j, kVector, j);
+                ExtractMatrixBufferFromCube(k_j, kVector, j);
 				if (aMatrix[getLowerTriangularIndex(i, j)] != 0.0)
-					_AddEqualMatrix(kRhs, k_j, MatrixOperation::None, MatrixOperation::None, aMatrix[getLowerTriangularIndex(i, j)] * dt);
+					_AddEqualMatrix(kRhs, k_j, MatrixOperation::None, MatrixOperation::None, 1.0, aMatrix[getLowerTriangularIndex(i, j)] * dt);
 			}
 
 			MemoryTile k_i;
-			extractMatrixBufferFromCube(k_i, kVector, i);
-			_Multiply(k_i, spaceDiscretizer, kRhs, spaceDiscretizer.nRows, kRhs.nRows);
+            ExtractMatrixBufferFromCube(k_i, kVector, i);
+			_Multiply(k_i, spaceDiscretizer, kRhs, MatrixOperation::None, MatrixOperation::None);
 
 			if (aMatrix[getLowerTriangularIndex(i, i)] != 0.0)
 			{
@@ -73,8 +73,8 @@ namespace detail
 		for (unsigned j = 0; j < N; ++j)
 		{
 			MemoryTile k_j;
-			extractMatrixBufferFromCube(k_j, kVector, j);
-			_AddEqualMatrix(timeDiscretizer, k_j, MatrixOperation::None, MatrixOperation::None, bVector[j] * dt);
+            ExtractMatrixBufferFromCube(k_j, kVector, j);
+			_AddEqualMatrix(timeDiscretizer, k_j, MatrixOperation::None, MatrixOperation::None, 1.0, bVector[j] * dt);
 		}
 
 		_Free(kVector);
@@ -93,13 +93,13 @@ EXTERN_C
 	*	Calculates the time discretization for the ODE (that comes from the space discretization of the advection-diffusion PDE)
 	u' = L * u
 	*/
-	EXPORT int _MakeTimeDiscretizerAdvectionDiffusion(MemoryCube timeDiscretizer, const MemoryTile spaceDiscretizer, const SolverType solverType, const double dt);
+	EXPORT int _MakeTimeDiscretizerAdvectionDiffusion(MemoryCube& timeDiscretizer, const MemoryTile& spaceDiscretizer, const SolverType solverType, const double dt);
 
 	/**
 	*	Calculates the time discretization for the ODE (that comes from the space discretization of the advection-diffusion PDE)
 	u'' = L * u
 	*/
-	EXPORT int _MakeTimeDiscretizerWaveEquation(MemoryCube timeDiscretizer, const MemoryTile spaceDiscretizer, const SolverType solverType, const double dt);
+	EXPORT int _MakeTimeDiscretizerWaveEquation(MemoryCube& timeDiscretizer, const MemoryTile& spaceDiscretizer, const SolverType solverType, const double dt);
 }
 
 template <typename T>

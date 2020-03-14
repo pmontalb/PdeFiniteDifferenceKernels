@@ -11,9 +11,9 @@ EXTERN_C
 	*	Calculates the space discretization for the advection-diffusion equation
 			u_t = (xVelocity, yVelocity) * grad(u) + diffusion * laplacian(u)
 	*/
-	EXPORT int _MakeSpaceDiscretizer2D(MemoryTile spaceDiscretizer, const FiniteDifferenceInput2D input);
+	EXPORT int _MakeSpaceDiscretizer2D(MemoryTile& spaceDiscretizer, const FiniteDifferenceInput2D& input);
 
-	EXPORT int _SetBoundaryConditions2D(MemoryTile solution, const FiniteDifferenceInput2D input);
+	EXPORT int _SetBoundaryConditions2D(MemoryTile& solution, const FiniteDifferenceInput2D& input);
 
 	/**
 	*	Evolve the solution for nSteps steps using the time discretizer, and sets the boundary conditions
@@ -22,7 +22,7 @@ EXTERN_C
 	*		* if provided, workBuffer is a previously allocated buffer used for matrix-vector multiplication
 	*		* the more the steps, the more efficient it will be, as there's less overhead in creating and destroying volatile buffers
 	*/
-	EXPORT int _Iterate2D(MemoryTile solution, const MemoryCube timeDiscretizer, const FiniteDifferenceInput2D input, const unsigned nSteps);
+	EXPORT int _Iterate2D(MemoryTile& solution, const MemoryCube& timeDiscretizer, const FiniteDifferenceInput2D& input, const unsigned nSteps);
 }
 
 template <typename T>

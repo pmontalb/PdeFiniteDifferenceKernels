@@ -100,7 +100,7 @@ EXTERN_C
 		BoundaryCondition left = BoundaryCondition();
 		BoundaryCondition right = BoundaryCondition();
 
-		BoundaryCondition1D(BoundaryCondition left_ = BoundaryCondition(), BoundaryCondition right_ = BoundaryCondition())
+		BoundaryCondition1D(const BoundaryCondition& left_ = BoundaryCondition(), const BoundaryCondition& right_ = BoundaryCondition())
 			: left(left_), right(right_)
 		{
 		}
@@ -118,7 +118,10 @@ EXTERN_C
 		BoundaryCondition down = BoundaryCondition();
 		BoundaryCondition up = BoundaryCondition();
 
-		BoundaryCondition2D(BoundaryCondition left_ = BoundaryCondition(), BoundaryCondition right_ = BoundaryCondition(), BoundaryCondition down_ = BoundaryCondition(), BoundaryCondition up_ = BoundaryCondition())
+		BoundaryCondition2D(const BoundaryCondition& left_ = BoundaryCondition(),
+							const BoundaryCondition& right_ = BoundaryCondition(),
+							const BoundaryCondition& down_ = BoundaryCondition(),
+							const BoundaryCondition& up_ = BoundaryCondition())
 			: BoundaryCondition1D(left_, right_), down(down_), up(up_)
 		{
 		}
@@ -168,12 +171,12 @@ EXTERN_C
 		BoundaryCondition1D boundaryConditions;
 
 		FiniteDifferenceInput1D(double dt_,
-								MemoryBuffer grid_,
-								MemoryBuffer velocity_,
-								MemoryBuffer diffusion_,
+								const MemoryBuffer& grid_,
+								const MemoryBuffer& velocity_,
+								const MemoryBuffer& diffusion_,
 								SolverType solverType_,
 								SpaceDiscretizerType spaceDiscretizerType_,
-								BoundaryCondition1D boundaryConditions_)
+								const BoundaryCondition1D& boundaryConditions_)
 			:
 			dt(dt_),
 			grid(grid_),
@@ -238,14 +241,14 @@ EXTERN_C
 		BoundaryCondition2D boundaryConditions;
 
 		FiniteDifferenceInput2D(double dt_,
-								MemoryBuffer xGrid_,
-								MemoryBuffer yGrid_,
-								MemoryBuffer xVelocity_,
-								MemoryBuffer yVelocity_,
-								MemoryBuffer diffusion_,
+								const MemoryBuffer& xGrid_,
+								const MemoryBuffer& yGrid_,
+								const MemoryBuffer& xVelocity_,
+								const MemoryBuffer& yVelocity_,
+								const MemoryBuffer& diffusion_,
 								SolverType solverType_,
 								SpaceDiscretizerType spaceDiscretizerType_,
-								BoundaryCondition2D boundaryConditions_)
+								const BoundaryCondition2D& boundaryConditions_)
 			:
 			dt(dt_),
 			xGrid(xGrid_),

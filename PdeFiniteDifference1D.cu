@@ -3,7 +3,7 @@
 
 EXTERN_C
 {
-	EXPORT int _MakeSpaceDiscretizer1D(MemoryTile spaceDiscretizer, const FiniteDifferenceInput1D input)
+	EXPORT int _MakeSpaceDiscretizer1D(MemoryTile& spaceDiscretizer, const FiniteDifferenceInput1D& input)
 	{
 	    if (input.spaceDiscretizerType == SpaceDiscretizerType::Null)
 			return CudaKernelException::_NotImplementedException;
@@ -25,7 +25,7 @@ EXTERN_C
 	/**
 	*	Sets the boundary conditions in the solution. It's a bit of a waste calling a kernel<<<1, 1>>>, but I found no other good way!
 	*/
-    EXPORT int _SetBoundaryConditions1D(MemoryTile solution, const FiniteDifferenceInput1D input)
+    EXPORT int _SetBoundaryConditions1D(MemoryTile& solution, const FiniteDifferenceInput1D& input)
 	{
 		switch (solution.mathDomain)
 		{
@@ -41,10 +41,10 @@ EXTERN_C
 		return cudaGetLastError();
 	}
 
-	EXPORT int _Iterate1D(MemoryTile solution, const MemoryCube timeDiscretizer, const FiniteDifferenceInput1D input, const unsigned nSteps)
+	EXPORT int _Iterate1D(MemoryTile& solution, const MemoryCube& timeDiscretizer, const FiniteDifferenceInput1D& input, const unsigned nSteps)
 	{
 		// allocate a volatile buffer, used for the matrix-vector dot-product
-		MemoryTile workBuffer = MemoryTile(solution);
+		MemoryTile workBuffer = solution;
 		_Alloc(workBuffer);
 
 		bool overwriteBuffer = true;
