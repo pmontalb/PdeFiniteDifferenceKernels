@@ -15,5 +15,5 @@ create_cuda_library(
         PdeFiniteDifference1D.cu
         PdeFiniteDifference2D.cu
     PUBLIC_INCLUDE_DIRECTORIES
-        ../CudaLightKernels .
+        CudaLightKernels .
 )
