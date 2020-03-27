@@ -4,7 +4,7 @@ include_guard()
 
 project(PdeFiniteDifferenceKernels)
 
-include(cmake/All.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/All.cmake)
 set(LANGUAGES_USE_CUDA ON CACHE BOOL "" FORCE)
 
 create_cuda_library(
