@@ -105,6 +105,38 @@ EXTERN_C
 
 		return cudaGetLastError();
     }
+
+	EXPORT int _SparseIterate2D(MemoryBuffer& solution, SparseMemoryTile& timeDiscretizer, const FiniteDifferenceInput2D& input, const unsigned nSteps)
+	{
+		// allocate a volatile buffer, used for the matrix-vector dot-product
+		MemoryBuffer workBuffer = solution;
+		_Alloc(workBuffer);
+
+		bool overwriteBuffer = true;
+		int err = 0;
+		for (unsigned n = 0; n < nSteps; ++n)
+		{
+			err = detail::_SparseAdvance(solution, timeDiscretizer, workBuffer, overwriteBuffer);
+			if (err)
+				return err;
+
+			// set boundary conditions
+			MemoryTile tmp(overwriteBuffer ? workBuffer : solution);
+			err = _SetBoundaryConditions2D(tmp, input);
+			if (err)
+				return err;
+
+			overwriteBuffer = !overwriteBuffer;
+		}
+
+		if (!overwriteBuffer)  // need the negation here, as it's set at the end of the loop!
+			// copy the result back from working buffer and free it
+			_DeviceToDeviceCopy(solution, workBuffer);
+
+		_Free(workBuffer);
+
+		return cudaGetLastError();
+	}
 }
 
 // the dimension of the spaceDiscretizer is (nRows * nCols) x (nRows * nCols)

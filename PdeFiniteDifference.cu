@@ -1,5 +1,7 @@
 #include "PdeFiniteDifference.cuh"
 
+#include <CuSparseWrappers.cuh>
+
 namespace detail
 {
 	/**
@@ -39,7 +41,6 @@ namespace detail
 		}
 
 		// add the partial results into the latest solution
-
 		for (unsigned i = 1; i < solution.nCols; ++i)
 		{
 			// cumulative sum of each step contribution into the first column
@@ -52,6 +53,25 @@ namespace detail
 			_in->pointer = inPtr + i * _in->TotalSize();
 			_DeviceToDeviceCopy(*_out, *_in);
 		}
+
+		return cudaGetLastError();
+	}
+
+	int _SparseAdvance(MemoryBuffer& solution, SparseMemoryTile& timeDiscretizer, MemoryBuffer& workBuffer, const bool overwriteBuffer)
+	{
+		// work out where to write the matrix-vector dot-product
+		MemoryBuffer *_out, *_in;
+		if (overwriteBuffer)
+		{
+			_out = &workBuffer;
+			_in = &solution;
+		}
+		else
+		{
+			_in = &workBuffer;
+			_out = &solution;
+		}
+		_SparseDot(*_out, timeDiscretizer, *_in);
 
 		return cudaGetLastError();
 	}

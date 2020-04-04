@@ -18,6 +18,7 @@ namespace detail
 	*	N.B.2: if provided, workBuffer is a previously allocated buffer used for matrix-vector multiplication
 	*/
 	int _Advance(MemoryTile& solution, const MemoryCube& timeDiscretizer, MemoryTile& workBuffer, const bool overwriteBuffer);
+	int _SparseAdvance(MemoryBuffer& solution, SparseMemoryTile& timeDiscretizer, MemoryBuffer& workBuffer, const bool overwriteBuffer);
 
 	// N is the size of the Butcher tableau table
 	// aMatrix is the lower triangular tableau matrix. If the diagonal is populated the method is an implicit RK

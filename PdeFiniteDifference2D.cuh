@@ -23,6 +23,7 @@ EXTERN_C
 	*		* the more the steps, the more efficient it will be, as there's less overhead in creating and destroying volatile buffers
 	*/
 	EXPORT int _Iterate2D(MemoryTile& solution, const MemoryCube& timeDiscretizer, const FiniteDifferenceInput2D& input, const unsigned nSteps);
+	EXPORT int _SparseIterate2D(MemoryBuffer& solution, SparseMemoryTile& timeDiscretizer, const FiniteDifferenceInput2D& input, const unsigned nSteps);
 }
 
 template <typename T>
