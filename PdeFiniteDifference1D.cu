@@ -66,7 +66,7 @@ EXTERN_C
 		if (!overwriteBuffer)  // need the negation here, as it's set at the end of the loop!
 			// copy the result back from working buffer and free it
 			_DeviceToDeviceCopy(solution, workBuffer);
-		
+
 		_Free(workBuffer);
 
 		return cudaGetLastError();
