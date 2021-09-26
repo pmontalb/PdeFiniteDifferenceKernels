@@ -126,7 +126,7 @@ EXTERN_C
 		{
 		}
 
-		virtual ~BoundaryCondition2D() noexcept = default;
+		~BoundaryCondition2D() noexcept override = default;
 		BoundaryCondition2D(const BoundaryCondition2D& rhs) noexcept = default;
 		BoundaryCondition2D(BoundaryCondition2D&& rhs) noexcept = default;
 		BoundaryCondition2D& operator=(const BoundaryCondition2D& rhs) noexcept = default;
